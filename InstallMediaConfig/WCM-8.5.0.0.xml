@@ -1,0 +1,152 @@
+<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04">
+  <Obj RefId="0">
+    <TN RefId="0">
+      <T>IBMProductMedia</T>
+      <T>System.Object</T>
+    </TN>
+    <ToString>IBMProductMedia</ToString>
+    <Props>
+      <S N="Name">IBM Web Content Manager</S>
+      <S N="ShortName">WCM85</S>
+      <Version N="Version">8.5.0.0</Version>
+      <Obj N="MediaFiles" RefId="1">
+        <TN RefId="1">
+          <T>MediaFile[]</T>
+          <T>System.Array</T>
+          <T>System.Object</T>
+        </TN>
+        <LST>
+          <Obj RefId="2">
+            <TN RefId="2">
+              <T>MediaFile</T>
+              <T>System.Object</T>
+            </TN>
+            <ToString>MediaFile</ToString>
+            <Props>
+              <S N="Name">WCM_8.5_SETUP.zip</S>
+              <Nil N="RepositoryConfigPath" />
+              <I64 N="SizeOnDisk">3030753280</I64>
+              <Nil N="SubMediaFiles" />
+            </Props>
+          </Obj>
+          <Obj RefId="3">
+            <TNRef RefId="2" />
+            <ToString>MediaFile</ToString>
+            <Props>
+              <S N="Name">WCM_8.5_Install.zip</S>
+              <S N="RepositoryConfigPath">WP85_WCM\repository.config</S>
+              <I64 N="SizeOnDisk">1048576</I64>
+              <Nil N="SubMediaFiles" />
+            </Props>
+          </Obj>
+        </LST>
+      </Obj>
+      <Nil N="RequiredFixesMediaFiles" />
+      <Obj N="RequiredProducts" RefId="4">
+        <TN RefId="3">
+          <T>IBMProductMedia[]</T>
+          <T>System.Array</T>
+          <T>System.Object</T>
+        </TN>
+        <LST>
+          <Obj RefId="5">
+            <TNRef RefId="0" />
+            <ToString>IBMProductMedia</ToString>
+            <Props>
+              <S N="Name">IBM WebSphere Portal MultiPlatform</S>
+              <S N="ShortName">WP85</S>
+              <Version N="Version">8.5.0.0</Version>
+              <Obj N="MediaFiles" RefId="6">
+                <TNRef RefId="1" />
+                <LST>
+                  <Obj RefId="7">
+                    <TNRef RefId="2" />
+                    <ToString>MediaFile</ToString>
+                    <Props>
+                      <S N="Name">WSP_Server_8.5_Setup.zip</S>
+                      <S N="RepositoryConfigPath">SETUP\repository.config</S>
+                      <I64 N="SizeOnDisk">3035193344</I64>
+                      <Nil N="SubMediaFiles" />
+                    </Props>
+                  </Obj>
+                  <Obj RefId="8">
+                    <TNRef RefId="2" />
+                    <ToString>MediaFile</ToString>
+                    <Props>
+                      <S N="Name">WSP_Server_8.5_Install.zip</S>
+                      <S N="RepositoryConfigPath">WP85_Server\repository.config</S>
+                      <I64 N="SizeOnDisk">1839120384</I64>
+                      <Nil N="SubMediaFiles" />
+                    </Props>
+                  </Obj>
+                </LST>
+              </Obj>
+              <Nil N="RequiredFixesMediaFiles" />
+              <Obj N="RequiredProducts" RefId="9">
+                <TNRef RefId="3" />
+                <LST>
+                  <Obj RefId="10">
+                    <TNRef RefId="0" />
+                    <ToString>IBMProductMedia</ToString>
+                    <Props>
+                      <S N="Name">IBM WebSphere Application Server Network Deployment</S>
+                      <Nil N="ShortName" />
+                      <Version N="Version">8.5.5.2</Version>
+                      <Obj N="MediaFiles" RefId="11">
+                        <TNRef RefId="1" />
+                        <LST>
+                          <Obj RefId="12">
+                            <TNRef RefId="2" />
+                            <ToString>MediaFile</ToString>
+                            <Props>
+                              <S N="Name">WSA_Server_NetDeplo_8.5.5.2.zip</S>
+                              <S N="RepositoryConfigPath">WAS8552\repository.config</S>
+                              <I64 N="SizeOnDisk">3046027264</I64>
+                              <Nil N="SubMediaFiles" />
+                            </Props>
+                          </Obj>
+                        </LST>
+                      </Obj>
+                      <Nil N="RequiredFixesMediaFiles" />
+                      <Obj N="RequiredProducts" RefId="13">
+                        <TNRef RefId="3" />
+                        <LST>
+                          <Obj RefId="14">
+                            <TNRef RefId="0" />
+                            <ToString>IBMProductMedia</ToString>
+                            <Props>
+                              <S N="Name">IBM WebSphere SDK Java Technology Edition (Optional)</S>
+                              <Nil N="ShortName" />
+                              <Version N="Version">7.0.6.1</Version>
+                              <Obj N="MediaFiles" RefId="15">
+                                <TNRef RefId="1" />
+                                <LST>
+                                  <Obj RefId="16">
+                                    <TNRef RefId="2" />
+                                    <ToString>MediaFile</ToString>
+                                    <Props>
+                                      <S N="Name">WS_SDK_JAVA_TECH_7.0.6.1.zip</S>
+                                      <S N="RepositoryConfigPath">IBMJAVA7\repository.config</S>
+                                      <I64 N="SizeOnDisk">2321129472</I64>
+                                      <Nil N="SubMediaFiles" />
+                                    </Props>
+                                  </Obj>
+                                </LST>
+                              </Obj>
+                              <Nil N="RequiredFixesMediaFiles" />
+                              <Nil N="RequiredProducts" />
+                            </Props>
+                          </Obj>
+                        </LST>
+                      </Obj>
+                    </Props>
+                  </Obj>
+                </LST>
+              </Obj>
+            </Props>
+          </Obj>
+        </LST>
+      </Obj>
+    </Props>
+  </Obj>
+</Objs>
