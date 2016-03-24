@@ -9,7 +9,7 @@
 RootModule = 'cIBMWebSpherePortal.psm1'
 
 # Version number of this module.
-ModuleVersion = '1.0.0'
+ModuleVersion = '1.0.1'
 
 # ID used to uniquely identify this module
 GUID = '363845a1-960b-4444-9fec-5a2461fbed26'
@@ -43,8 +43,8 @@ PowerShellVersion = '5.0'
 
 # Modules that must be imported into the global environment prior to importing this module
 RequiredModules = @(
-    @{ ModuleName = 'cIBMInstallationManager'; ModuleVersion = '1.0.2'},
-    @{ ModuleName = 'cIBMWebSphereAppServer'; ModuleVersion = '1.0.1'}
+    @{ ModuleName = 'cIBMInstallationManager'; ModuleVersion = '1.0.4'},
+    @{ ModuleName = 'cIBMWebSphereAppServer'; ModuleVersion = '1.0.3'}
 )
 
 # Name of the Windows PowerShell host required by this module
@@ -92,7 +92,7 @@ PrivateData = @{
     PSData = @{
 
         # Tags applied to this module. These help with module discovery in online galleries.
-        Tags = @('IBM', 'WebSphere Portal', 'WebSphere')
+        Tags = @('IBM', 'WebSpherePortal', 'WebSphere')
 
         # A URL to the license for this module.
         LicenseUri = 'https://raw.githubusercontent.com/dennypc/cIBMWebSpherePortal/master/LICENSE'
@@ -104,7 +104,7 @@ PrivateData = @{
         # IconUri = ''
 
         # ReleaseNotes of this module
-        # ReleaseNotes = ''
+        ReleaseNotes = 'Supports binary install via new Primary DSC property. Supports installing on top of existing App Servers'
 
     } # End of PSData hashtable
 

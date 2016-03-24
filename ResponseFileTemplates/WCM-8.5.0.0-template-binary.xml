@@ -5,19 +5,13 @@
         <variable name='wpInstallLocation' value='C:\IBM\WebSphere\'/>
         <variable name='wasadmin' value='wsadmin'/>
         <variable name='wasadminPwd' value=''/>
-        <variable name='wpadmin' value='wsadmin'/>
-        <variable name='wpadminPwd' value=''/>
-        <variable name='hostName' value=''/>
-        <variable name='cellName' value='wpCell'/>
-        <variable name='nodeName' value='wpNode'/>
-        <variable name='profileName' value='wp_profile'/>
     </variables>
 	<server>
 	</server>
     
     <install modify='false'>
         <!-- IBM WebSphere Portal Server 8.5.0.0 -->
-		<offering id='com.ibm.websphere.PORTAL.SERVER.v85' version='8.5.0.20140424_2155' profile='IBM WebSphere Portal Server V8.5' features='ce.install,portal.binary,portal.profile' installFixes='none'/>
+		<offering id='com.ibm.websphere.PORTAL.SERVER.v85' version='8.5.0.20140424_2155' profile='IBM WebSphere Portal Server V8.5' features='ce.install,portal.binary' installFixes='none'/>
 		<!-- IBM Web Content Manager  8.5.0.0 -->
         <offering id='com.ibm.websphere.PORTAL.WCM.v85' profile='IBM WebSphere Portal Server V8.5' features='enable.upsell' installFixes='none'/>
 	</install>
@@ -40,18 +34,6 @@
         <data key='user.wp.base.offering,com.ibm.websphere.PORTAL.WCM.v85' value='portal.server'/>
 		<data key='user.iim.currentlocale,com.ibm.websphere.PORTAL.SERVER.v85' value='en'/>
 		<data key='cic.selector.nl' value='en'/>
-		<data key='user.import.profile' value='false'/>
-		<data key='user.wp.hostname,com.ibm.websphere.PORTAL.SERVER.v85' value='${hostName}'/>
-		<data key='user.wp.cellname,com.ibm.websphere.PORTAL.SERVER.v85' value='${cellName}'/>
-		<data key='user.wp.nodename,com.ibm.websphere.PORTAL.SERVER.v85' value='${nodeName}'/>
-		<data key='user.wp.userid,com.ibm.websphere.PORTAL.SERVER.v85' value='${wpadmin}'/>
-		<data key='user.wp.password,com.ibm.websphere.PORTAL.SERVER.v85' value='${wpadminPwd}'/>
-		<data key='user.wp.custom.contextroot,com.ibm.websphere.PORTAL.SERVER.v85' value='wps'/>
-		<data key='user.wp.custom.defaulthome,com.ibm.websphere.PORTAL.SERVER.v85' value='portal'/>
-		<data key='user.wp.custom.personalhome,com.ibm.websphere.PORTAL.SERVER.v85' value='myportal'/>
-		<data key='user.wp.starting.port,com.ibm.websphere.PORTAL.SERVER.v85' value='10012'/>
-		<data key='user.wp.profilename,com.ibm.websphere.PORTAL.SERVER.v85' value='${profileName}'/>
-		<data key='user.wp.profilepath,com.ibm.websphere.PORTAL.SERVER.v85' value='${wpInstallLocation}${profileName}'/>
 	</profile>
   
 	<preference name='com.ibm.cic.common.core.preferences.eclipseCache' value='${sharedLocation}'/>

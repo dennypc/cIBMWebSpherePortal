@@ -82,67 +82,7 @@
                 </LST>
               </Obj>
               <Nil N="RequiredFixesMediaFiles" />
-              <Obj N="RequiredProducts" RefId="9">
-                <TNRef RefId="3" />
-                <LST>
-                  <Obj RefId="10">
-                    <TNRef RefId="0" />
-                    <ToString>IBMProductMedia</ToString>
-                    <Props>
-                      <S N="Name">IBM WebSphere Application Server Network Deployment</S>
-                      <Nil N="ShortName" />
-                      <Version N="Version">8.5.5.2</Version>
-                      <Obj N="MediaFiles" RefId="11">
-                        <TNRef RefId="1" />
-                        <LST>
-                          <Obj RefId="12">
-                            <TNRef RefId="2" />
-                            <ToString>MediaFile</ToString>
-                            <Props>
-                              <S N="Name">WSA_Server_NetDeplo_8.5.5.2.zip</S>
-                              <S N="RepositoryConfigPath">WAS8552\repository.config</S>
-                              <I64 N="SizeOnDisk">3046027264</I64>
-                              <Nil N="SubMediaFiles" />
-                            </Props>
-                          </Obj>
-                        </LST>
-                      </Obj>
-                      <Nil N="RequiredFixesMediaFiles" />
-                      <Obj N="RequiredProducts" RefId="13">
-                        <TNRef RefId="3" />
-                        <LST>
-                          <Obj RefId="14">
-                            <TNRef RefId="0" />
-                            <ToString>IBMProductMedia</ToString>
-                            <Props>
-                              <S N="Name">IBM WebSphere SDK Java Technology Edition (Optional)</S>
-                              <Nil N="ShortName" />
-                              <Version N="Version">7.0.6.1</Version>
-                              <Obj N="MediaFiles" RefId="15">
-                                <TNRef RefId="1" />
-                                <LST>
-                                  <Obj RefId="16">
-                                    <TNRef RefId="2" />
-                                    <ToString>MediaFile</ToString>
-                                    <Props>
-                                      <S N="Name">WS_SDK_JAVA_TECH_7.0.6.1.zip</S>
-                                      <S N="RepositoryConfigPath">IBMJAVA7\repository.config</S>
-                                      <I64 N="SizeOnDisk">2321129472</I64>
-                                      <Nil N="SubMediaFiles" />
-                                    </Props>
-                                  </Obj>
-                                </LST>
-                              </Obj>
-                              <Nil N="RequiredFixesMediaFiles" />
-                              <Nil N="RequiredProducts" />
-                            </Props>
-                          </Obj>
-                        </LST>
-                      </Obj>
-                    </Props>
-                  </Obj>
-                </LST>
-              </Obj>
+              <Nil N="RequiredProducts" />
             </Props>
           </Obj>
         </LST>

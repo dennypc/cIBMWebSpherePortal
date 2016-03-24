@@ -71,6 +71,9 @@ class cIBMWebSpherePortal {
     
     [DscProperty()]
     [String] $ResponseFileTemplate
+    
+    [DscProperty()]
+    [Bool] $Primary = $true
 
     [DscProperty()]
     [String] $SourcePath
@@ -89,18 +92,38 @@ class cIBMWebSpherePortal {
                 if (!([string]::IsNullOrEmpty($sevenZipExe)) -and (Test-Path($sevenZipExe))) {
                     $ibmwpEdition = $this.PortalEdition.ToString()
                     $wpVersion = $this.Version
+                    $tempServerName = $this.ServerName[0]
+                    $mediaConfig = $null
+                    $responseFile = $null
+                    
+                    $WASInsDir = Get-IBMWebSphereAppServerInstallLocation -WASEdition ND
+                    $wasndInstalled = ($WASInsDir -and (Test-Path $WASInsDir))
                     if (!($this.InstallMediaConfig)) {
-                        $this.InstallMediaConfig = Join-Path -Path $PSScriptRoot -ChildPath "InstallMediaConfig\$ibmwpEdition-$wpVersion.xml"
+                        if ($wasndInstalled) {
+                            $mediaConfig = Join-Path -Path $PSScriptRoot -ChildPath "InstallMediaConfig\$ibmwpEdition-$wpVersion.xml"
+                        } else {
+                            $mediaConfig = Join-Path -Path $PSScriptRoot -ChildPath "InstallMediaConfig\$ibmwpEdition-$wpVersion-plus-ND.xml"
+                        }
                     }
                     if (!($this.ResponseFileTemplate)) {
-                        $this.ResponseFileTemplate = Join-Path -Path $PSScriptRoot -ChildPath "ResponseFileTemplates\$ibmwpEdition-$wpVersion-template.xml"
+                        if ($wasndInstalled -and $this.Primary) {
+                            $responseFile = Join-Path -Path $PSScriptRoot -ChildPath "ResponseFileTemplates\$ibmwpEdition-$wpVersion-template.xml"
+                        } elseif ($wasndInstalled) {
+                            $responseFile = Join-Path -Path $PSScriptRoot -ChildPath "ResponseFileTemplates\$ibmwpEdition-$wpVersion-template-binary.xml"
+                        } elseif ($this.Primary) {
+                            $responseFile = Join-Path -Path $PSScriptRoot -ChildPath "ResponseFileTemplates\$ibmwpEdition-$wpVersion-template-plus-ND-binary.xml"
+                        } else {
+                            $responseFile = Join-Path -Path $PSScriptRoot -ChildPath "ResponseFileTemplates\$ibmwpEdition-$wpVersion-template-plus-ND.xml"
+                        }
                     }
-                    $tempServerName = $this.ServerName[0]
-                    $installed = Install-IBMWebSpherePortal -InstallMediaConfig $this.InstallMediaConfig -ResponseFileTemplate $this.ResponseFileTemplate `
-                                    -InstallationDirectory $this.InstallationDirectory -IMSharedLocation $this.IMSharedLocation -CellName $this.CellName `
-                                    -ProfileName $this.ProfileName -NodeName $this.NodeName -ServerName $tempServerName -HostName $this.HostName `
-                                    -WebSphereAdministratorCredential $this.WebSphereAdministratorCredential -PortalAdministratorCredential $this.PortalAdministratorCredential `
-                                    -SourcePath $this.SourcePath -SourcePathCredential $this.SourcePathCredential
+                    
+                    # Install Portal Only
+                    $installed = Install-IBMWebSpherePortal -InstallMediaConfig $mediaConfig -ResponseFileTemplate $responseFile `
+                                -InstallationDirectory $this.InstallationDirectory -IMSharedLocation $this.IMSharedLocation -CellName $this.CellName `
+                                -ProfileName $this.ProfileName -NodeName $this.NodeName -ServerName $tempServerName -HostName $this.HostName `
+                                -WebSphereAdministratorCredential $this.WebSphereAdministratorCredential -PortalAdministratorCredential $this.PortalAdministratorCredential `
+                                -SourcePath $this.SourcePath -SourcePathCredential $this.SourcePathCredential
+                    
                     if ($installed) {
                         Write-Verbose "IBM WebSphere Portal Installed Successfully"
                     } else {
@@ -168,70 +191,71 @@ class cIBMWebSpherePortal {
         $RetNodeName = $null
         $RetServerName = $null
 
-        $wpVersionObj = (New-Object -TypeName System.Version -ArgumentList $this.Version)
-
         # Check if WAS ND is installed / Portal depends on it
         $WASInsDir = Get-IBMWebSphereAppServerInstallLocation -WASEdition ND
         
         if($WASInsDir -and (Test-Path($WASInsDir))) {
             Write-Verbose "IBM WAS ND is Present"
             # Attempt to retrieve the Portal version information
-            $wpVersionInfo = Get-IBMWebSpherePortalVersionInfo ($this.InstallationDirectory) -ErrorAction Continue
-            if ($wpVersionInfo -and $wpVersionInfo["Product Directory"]) {
-                Write-Verbose "IBM WebSphere Portal is Present"
-                $portalHome = $wpVersionInfo["Product Directory"]
-                $RetEnsure = [Ensure]::Present
-                if ($portalHome -and ((Split-Path $portalHome) -eq $this.InstallationDirectory)) {
-                    $RetInsDir = $this.InstallationDirectory
-                    $wpEdition = $this.PortalEdition.ToString()
-                    # Ensure that it is the right Portal Edition (i.e. WCM vs EXPRESS vs MP)
-                    if ($wpVersionInfo.Products[$wpEdition]) {
-                        $RetWPEdition = $this.PortalEdition
-                        $RetVersion = $wpVersionInfo.Products[$wpEdition].Version
-                    } elseif ($wpVersionInfo.Products.Keys.Count -gt 0) {
-                        ForEach ($wpProduct in $wpVersionInfo.Products.Keys) {
-                            if (!((@('MP','CFGFW')).Contains($wpProduct))) {
-                                $RetWPEdition = $wpProduct
-                                $RetVersion = $wpVersionInfo.Products.$wpProduct.Version
-                                break;
+            $portalDir = Join-Path -Path (Split-Path $WASInsDir) -ChildPath "PortalServer"
+            if ($portalDir -and (Test-Path $portalDir)) {
+                $wpVersionInfo = Get-IBMWebSpherePortalVersionInfo ($this.InstallationDirectory) -ErrorAction Continue
+                if ($wpVersionInfo -and $wpVersionInfo["Product Directory"]) {
+                    Write-Verbose "IBM WebSphere Portal is Present"
+                    $portalHome = $wpVersionInfo["Product Directory"]
+                    $RetEnsure = [Ensure]::Present
+                    if ($portalHome -and ((Split-Path $portalHome) -eq $this.InstallationDirectory)) {
+                        $RetInsDir = $this.InstallationDirectory
+                        $wpEdition = $this.PortalEdition.ToString()
+                        # Ensure that it is the right Portal Edition (i.e. WCM vs EXPRESS vs MP)
+                        if ($wpVersionInfo.Products[$wpEdition]) {
+                            $RetWPEdition = $this.PortalEdition
+                            $RetVersion = $wpVersionInfo.Products[$wpEdition].Version
+                        } elseif ($wpVersionInfo.Products.Keys.Count -gt 0) {
+                            ForEach ($wpProduct in $wpVersionInfo.Products.Keys) {
+                                if (!((@('MP','CFGFW')).Contains($wpProduct))) {
+                                    $RetWPEdition = $wpProduct
+                                    $RetVersion = $wpVersionInfo.Products.$wpProduct.Version
+                                    break;
+                                }
+                            }
+                            if (!($RetWPEdition)) {
+                                $RetWPEdition = [PortalEdition]::MP
+                                $RetVersion = $wpVersionInfo.Products.MP.Version
                             }
                         }
-                        if (!($RetWPEdition)) {
-                            $RetWPEdition = [PortalEdition]::MP
-                            $RetVersion = $wpVersionInfo.Products.MP.Version
-                        }
+                    } elseif ($portalHome) {
+                        $RetInsDir = (Split-Path $portalHome)
                     }
-                } elseif ($portalHome) {
-                    $RetInsDir = (Split-Path $portalHome)
-                }
-                # Retreive the current topology, if it doesn't match return the current topology
-                $wpProfilePath = Join-Path -Path ($this.InstallationDirectory) -ChildPath ($this.ProfileName)
-                if (Test-WebSphereTopology $wpProfilePath $this.CellName $this.NodeName $this.ServerName) {
-                    $RetProfileName = $this.ProfileName
-                    $RetCellName = $this.CellName
-                    $RetNodeName = $this.NodeName
-                    $RetServerName = $this.ServerName
-                } else {
-                    $wasTopology = Get-WebSphereTopology $wpProfilePath
-                    # Return the first node / set of servers found
-                    if ($wasTopology -and ($wasTopology.Count -gt 0)) {
+                    # Retreive the current topology, if it doesn't match return the current topology
+                    $wpProfilePath = Join-Path -Path ($this.InstallationDirectory) -ChildPath ($this.ProfileName)
+                    if (Test-WebSphereTopology $wpProfilePath $this.CellName $this.NodeName $this.ServerName) {
                         $RetProfileName = $this.ProfileName
-                        ForEach ($wasCell in $wasTopology.Keys) {
-                            if ($wasTopology.$wasCell.Count -gt 0) {
-                                ForEach ($wasNode in $wasTopology.$wasCell.Keys) {
-                                    if ($wasTopology.$wasCell.$wasNode) {
-                                        $RetCellName = $wasCell
-                                        $RetNodeName = $wasNode
-                                        $RetServerName = $wasTopology.$wasCell.$wasNode
-                                        break;
+                        $RetCellName = $this.CellName
+                        $RetNodeName = $this.NodeName
+                        $RetServerName = $this.ServerName
+                    } else {
+                        $wasTopology = Get-WebSphereTopology $wpProfilePath
+                        # Return the first node / set of servers found
+                        if ($wasTopology -and ($wasTopology.Count -gt 0)) {
+                            $RetProfileName = $this.ProfileName
+                            ForEach ($wasCell in $wasTopology.Keys) {
+                                if ($wasTopology.$wasCell.Count -gt 0) {
+                                    ForEach ($wasNode in $wasTopology.$wasCell.Keys) {
+                                        if ($wasTopology.$wasCell.$wasNode) {
+                                            $RetCellName = $wasCell
+                                            $RetNodeName = $wasNode
+                                            $RetServerName = $wasTopology.$wasCell.$wasNode
+                                            break;
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                } else {
+                    Write-Verbose "Unable to retrieve the Portal version, Portal is NOT present"
                 }
-            } else {
-                Write-Verbose "Unable to retrieve the Portal version, Portal is NOT present"
             }
         } else {
             Write-Verbose "IBM WAS ND is NOT Present"

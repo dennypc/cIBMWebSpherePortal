@@ -23,6 +23,7 @@ PS> Install-Module -Name cIBMWebSpherePortal
 * **WebSphereAdministratorCredential**: (Required) Credential for the WebSphere Administrator.
 * **PortalAdministratorCredential**: (Optional) Credential for the Portal Administrator.
 * **InstallationDirectory**: Installation path.  Default: C:\IBM\WebSphere.
+* **Primary**: _Boolean_ Specifies if target machine is the primary.  If so profile will be created, otherwise binary install.
 * **CellName**: (Optional) Name of the WebSphere Cell.  Default: wpCell
 * **NodeName**: (Optional) Name of the WebSphere Node.  Default: wpNode
 * **ServerName**: (Optional) Name of the WebSphere Server.  Default: WebSphere_Portal
@@ -43,6 +44,10 @@ If you create your own Response File template it is expected that the template h
 DSC Resource or by leveraging the [x7Zip DSC Module](https://www.powershellgallery.com/packages/x7Zip/ "x7Zip at PowerShell Gallery")
 
 ## Versions
+
+### 1.0.1
+* Supports binary install via new Primary DSC property. 
+* Supports installing on top of existing App Servers.  Module automatically checks if WebSphere is installed.
 
 ### 1.0.0
 

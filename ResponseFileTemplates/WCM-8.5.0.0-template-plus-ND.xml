@@ -1,0 +1,75 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<agent-input>
+    <variables>
+        <variable name='sharedLocation' value='C:\IBM\IMShared'/>
+        <variable name='wpInstallLocation' value='C:\IBM\WebSphere\'/>
+        <variable name='wasFeatures' value='core.feature,ejbdeploy,thinclient,embeddablecontainer,com.ibm.sdk.6_64bit'/>
+        <variable name='wasadmin' value='wsadmin'/>
+        <variable name='wasadminPwd' value=''/>
+        <variable name='wpadmin' value='wsadmin'/>
+        <variable name='wpadminPwd' value=''/>
+        <variable name='hostName' value=''/>
+        <variable name='cellName' value='wpCell'/>
+        <variable name='nodeName' value='wpNode'/>
+        <variable name='profileName' value='wp_profile'/>
+    </variables>
+	<server>
+	</server>
+
+	<install modify='false'>
+		<offering id='8.5.5.0-WS-WASProd-IFPI15756' version='8.5.5000.20140411_1012' profile='IBM WebSphere Application Server V8.5' features='-'/>
+		<offering id='8.5.5.2-WS-WAS-IFPI15581' version='8.5.5002.20140411_1052' profile='IBM WebSphere Application Server V8.5' features='-'/>
+		<offering id='com.ibm.websphere.ND.v85' version='8.5.5002.20140408_1947' profile='IBM WebSphere Application Server V8.5' features='${wasFeatures}' installFixes='none'/>
+		<offering id='com.ibm.websphere.IBMJAVA.v70' version='7.0.6001.20140324_2202' profile='IBM WebSphere Application Server V8.5' features='com.ibm.sdk.7' installFixes='none'/>
+		<offering id='com.ibm.websphere.PORTAL.SERVER.v85' version='8.5.0.20140424_2155' profile='IBM WebSphere Portal Server V8.5' features='ce.install,portal.binary,portal.profile' installFixes='none'/>
+		<offering id='com.ibm.websphere.PORTAL.WCM.v85' profile='IBM WebSphere Portal Server V8.5' features='enable.upsell' installFixes='none'/>
+	</install>
+
+	<profile id='IBM WebSphere Application Server V8.5' installLocation='${wpInstallLocation}AppServer'>
+		<data key='eclipseLocation' value='${wpInstallLocation}AppServer'/>
+		<data key='user.import.profile' value='false'/>
+		<data key='cic.selector.nl' value='en'/>
+	</profile>
+
+	<profile id='IBM WebSphere Portal Server V8.5' installLocation='${wpInstallLocation}PortalServer'>
+		<data key='eclipseLocation' value='${wpInstallLocation}PortalServer'/>
+		<data key='user.was.installLocation,com.ibm.websphere.PORTAL.SERVER.v85' value='${wpInstallLocation}AppServer'/>
+		<data key='user.configengine.binaryLocation,com.ibm.websphere.PORTAL.SERVER.v85' value='${wpInstallLocation}ConfigEngine'/>
+		<data key='user.wp.wasprofiles.location,com.ibm.websphere.PORTAL.SERVER.v85' value='${wpInstallLocation}AppServer\profiles'/>
+		<data key='user.cw.userid,com.ibm.websphere.PORTAL.SERVER.v85' value='${wasadmin}'/>
+		<data key='user.cw.password,com.ibm.websphere.PORTAL.SERVER.v85' value='${wasadminPwd}'/>
+		<data key='user.wp.base.offering,com.ibm.websphere.PORTAL.SERVER.v85' value='portal.server'/>
+		<data key='user.iim.currentlocale,com.ibm.websphere.PORTAL.SERVER.v85' value='en'/>
+		<data key='cic.selector.nl' value='en'/>
+		<data key='user.import.profile' value='false'/>
+		<data key='user.wp.hostname,com.ibm.websphere.PORTAL.SERVER.v85' value='${hostName}'/>
+		<data key='user.wp.cellname,com.ibm.websphere.PORTAL.SERVER.v85' value='${cellName}'/>
+		<data key='user.wp.nodename,com.ibm.websphere.PORTAL.SERVER.v85' value='${nodeName}'/>
+		<data key='user.wp.userid,com.ibm.websphere.PORTAL.SERVER.v85' value='${wpadmin}'/>
+		<data key='user.wp.password,com.ibm.websphere.PORTAL.SERVER.v85' value='${wpadminPwd}'/>
+		<data key='user.wp.custom.contextroot,com.ibm.websphere.PORTAL.SERVER.v85' value='wps'/>
+		<data key='user.wp.custom.defaulthome,com.ibm.websphere.PORTAL.SERVER.v85' value='portal'/>
+		<data key='user.wp.custom.personalhome,com.ibm.websphere.PORTAL.SERVER.v85' value='myportal'/>
+		<data key='user.wp.starting.port,com.ibm.websphere.PORTAL.SERVER.v85' value='10012'/>
+		<data key='user.wp.profilename,com.ibm.websphere.PORTAL.SERVER.v85' value='${profileName}'/>
+		<data key='user.wp.profilepath,com.ibm.websphere.PORTAL.SERVER.v85' value='${wpInstallLocation}${profileName}'/>
+	</profile>
+
+	<preference name='com.ibm.cic.common.core.preferences.eclipseCache' value='${sharedLocation}'/>
+	<preference name='com.ibm.cic.common.core.preferences.connectTimeout' value='30'/>
+	<preference name='com.ibm.cic.common.core.preferences.readTimeout' value='45'/>
+	<preference name='com.ibm.cic.common.core.preferences.downloadAutoRetryCount' value='0'/>
+	<preference name='offering.service.repositories.areUsed' value='false'/>
+	<preference name='com.ibm.cic.common.core.preferences.ssl.nonsecureMode' value='false'/>
+	<preference name='com.ibm.cic.common.core.preferences.http.disablePreemptiveAuthentication' value='false'/>
+	<preference name='http.ntlm.auth.kind' value='NTLM'/>
+	<preference name='http.ntlm.auth.enableIntegrated.win32' value='true'/>
+	<preference name='com.ibm.cic.common.core.preferences.preserveDownloadedArtifacts' value='true'/>
+	<preference name='com.ibm.cic.common.core.preferences.keepFetchedFiles' value='false'/>
+	<preference name='PassportAdvantageIsEnabled' value='false'/>
+	<preference name='com.ibm.cic.common.core.preferences.searchForUpdates' value='false'/>
+	<preference name='com.ibm.cic.agent.ui.displayInternalVersion' value='false'/>
+	<preference name='com.ibm.cic.common.sharedUI.showErrorLog' value='true'/>
+	<preference name='com.ibm.cic.common.sharedUI.showWarningLog' value='true'/>
+	<preference name='com.ibm.cic.common.sharedUI.showNoteLog' value='true'/>
+</agent-input>

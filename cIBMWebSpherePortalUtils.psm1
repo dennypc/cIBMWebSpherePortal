@@ -26,7 +26,7 @@ Function Get-IBMWebSpherePortalVersionInfo() {
     #Validate Parameters
     [string] $versionInfoBat = Join-Path -Path $InstallationDirectory -ChildPath "PortalServer\bin\WPVersionInfo.bat"
     if (!(Test-Path($versionInfoBat))) {
-        Write-Error "Invalid InstallationDirectory: $InstallationDirectory\bin\WPVersionInfo.bat not found"
+        Write-Error "Invalid InstallationDirectory: $versionInfoBat not found"
         Return $null
     }
         
