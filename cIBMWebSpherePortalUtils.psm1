@@ -153,7 +153,7 @@ Function Install-IBMWebSpherePortal() {
 		$ResponseFileTemplate,
         
 		[System.String]
-    	$InstallationDirectory = "C:\IBM\WebSphere",
+    	$InstallationDirectory = "C:\IBM\WebSphere\",
         
         [parameter(Mandatory = $true)]
 		[System.String]
@@ -193,8 +193,17 @@ Function Install-IBMWebSpherePortal() {
     $installed = $false
     # Populate variables needed by response file templates
     [Hashtable] $Variables = @{}
-    $Variables.Add("sharedLocation", $IMSharedLocation)
-    $Variables.Add("wasInstallLocation", $InstallationDirectory)
+    if (!($IMSharedLocation.EndsWith([System.IO.Path]::DirectorySeparatorChar)) -and !($IMSharedLocation.EndsWith([System.IO.Path]::AltDirectorySeparatorChar))) {
+        $Variables.Add("sharedLocation", ($IMSharedLocation + [System.IO.Path]::DirectorySeparatorChar))
+    } else {
+        $Variables.Add("sharedLocation", $IMSharedLocation)
+    }
+    if (!($InstallationDirectory.EndsWith([System.IO.Path]::DirectorySeparatorChar)) -and !($InstallationDirectory.EndsWith([System.IO.Path]::AltDirectorySeparatorChar))) {
+        $Variables.Add("wasInstallLocation", ($InstallationDirectory + [System.IO.Path]::DirectorySeparatorChar))
+    } else {
+        $Variables.Add("wasInstallLocation", $InstallationDirectory)
+    }
+    
     $Variables.Add("cellName", $CellName)
     $Variables.Add("profileName", $ProfileName)
     $Variables.Add("nodeName", $NodeName)

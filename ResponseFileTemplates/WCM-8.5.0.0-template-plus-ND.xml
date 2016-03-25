@@ -2,7 +2,7 @@
 <agent-input>
     <variables>
         <variable name='sharedLocation' value='C:\IBM\IMShared'/>
-        <variable name='wpInstallLocation' value='C:\IBM\WebSphere\'/>
+        <variable name='wasInstallLocation' value='C:\IBM\WebSphere\'/>
         <variable name='wasFeatures' value='core.feature,ejbdeploy,thinclient,embeddablecontainer,com.ibm.sdk.6_64bit'/>
         <variable name='wasadmin' value='wsadmin'/>
         <variable name='wasadminPwd' value=''/>
@@ -25,17 +25,17 @@
 		<offering id='com.ibm.websphere.PORTAL.WCM.v85' profile='IBM WebSphere Portal Server V8.5' features='enable.upsell' installFixes='none'/>
 	</install>
 
-	<profile id='IBM WebSphere Application Server V8.5' installLocation='${wpInstallLocation}AppServer'>
-		<data key='eclipseLocation' value='${wpInstallLocation}AppServer'/>
+	<profile id='IBM WebSphere Application Server V8.5' installLocation='${wasInstallLocation}AppServer'>
+		<data key='eclipseLocation' value='${wasInstallLocation}AppServer'/>
 		<data key='user.import.profile' value='false'/>
 		<data key='cic.selector.nl' value='en'/>
 	</profile>
 
-	<profile id='IBM WebSphere Portal Server V8.5' installLocation='${wpInstallLocation}PortalServer'>
-		<data key='eclipseLocation' value='${wpInstallLocation}PortalServer'/>
-		<data key='user.was.installLocation,com.ibm.websphere.PORTAL.SERVER.v85' value='${wpInstallLocation}AppServer'/>
-		<data key='user.configengine.binaryLocation,com.ibm.websphere.PORTAL.SERVER.v85' value='${wpInstallLocation}ConfigEngine'/>
-		<data key='user.wp.wasprofiles.location,com.ibm.websphere.PORTAL.SERVER.v85' value='${wpInstallLocation}AppServer\profiles'/>
+	<profile id='IBM WebSphere Portal Server V8.5' installLocation='${wasInstallLocation}PortalServer'>
+		<data key='eclipseLocation' value='${wasInstallLocation}PortalServer'/>
+		<data key='user.was.installLocation,com.ibm.websphere.PORTAL.SERVER.v85' value='${wasInstallLocation}AppServer'/>
+		<data key='user.configengine.binaryLocation,com.ibm.websphere.PORTAL.SERVER.v85' value='${wasInstallLocation}ConfigEngine'/>
+		<data key='user.wp.wasprofiles.location,com.ibm.websphere.PORTAL.SERVER.v85' value='${wasInstallLocation}AppServer\profiles'/>
 		<data key='user.cw.userid,com.ibm.websphere.PORTAL.SERVER.v85' value='${wasadmin}'/>
 		<data key='user.cw.password,com.ibm.websphere.PORTAL.SERVER.v85' value='${wasadminPwd}'/>
 		<data key='user.wp.base.offering,com.ibm.websphere.PORTAL.SERVER.v85' value='portal.server'/>
@@ -52,7 +52,7 @@
 		<data key='user.wp.custom.personalhome,com.ibm.websphere.PORTAL.SERVER.v85' value='myportal'/>
 		<data key='user.wp.starting.port,com.ibm.websphere.PORTAL.SERVER.v85' value='10012'/>
 		<data key='user.wp.profilename,com.ibm.websphere.PORTAL.SERVER.v85' value='${profileName}'/>
-		<data key='user.wp.profilepath,com.ibm.websphere.PORTAL.SERVER.v85' value='${wpInstallLocation}${profileName}'/>
+		<data key='user.wp.profilepath,com.ibm.websphere.PORTAL.SERVER.v85' value='${wasInstallLocation}${profileName}'/>
 	</profile>
 
 	<preference name='com.ibm.cic.common.core.preferences.eclipseCache' value='${sharedLocation}'/>
