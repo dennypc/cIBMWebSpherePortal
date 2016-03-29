@@ -14,8 +14,8 @@ Configuration IBMWCM
     )
     
     Import-DscResource -ModuleName 'PSDesiredStateConfiguration'
-    Import-DSCResource -ModuleName 'cIBMInstallationManager'
-    Import-DSCResource -ModuleName 'cIBMWebSpherePortal'
+    Import-DSCResource -ModuleName 'cIBMInstallationManager' -ModuleVersion '1.0.5'
+    Import-DSCResource -ModuleName 'cIBMWebSpherePortal' -ModuleVersion '1.0.1'
     
     node localhost {
         Package SevenZip {
