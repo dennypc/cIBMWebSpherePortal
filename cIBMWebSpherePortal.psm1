@@ -204,28 +204,34 @@ class cIBMWebSpherePortal {
                     Write-Verbose "IBM WebSphere Portal is Present"
                     $portalHome = $wpVersionInfo["Product Directory"]
                     $RetEnsure = [Ensure]::Present
-                    if ($portalHome -and ((Split-Path $portalHome) -eq $this.InstallationDirectory)) {
-                        $RetInsDir = $this.InstallationDirectory
-                        $wpEdition = $this.PortalEdition.ToString()
-                        # Ensure that it is the right Portal Edition (i.e. WCM vs EXPRESS vs MP)
-                        if ($wpVersionInfo.Products[$wpEdition]) {
-                            $RetWPEdition = $this.PortalEdition
-                            $RetVersion = $wpVersionInfo.Products[$wpEdition].Version
-                        } elseif ($wpVersionInfo.Products.Keys.Count -gt 0) {
-                            ForEach ($wpProduct in $wpVersionInfo.Products.Keys) {
-                                if (!((@('MP','CFGFW')).Contains($wpProduct))) {
-                                    $RetWPEdition = $wpProduct
-                                    $RetVersion = $wpVersionInfo.Products.$wpProduct.Version
-                                    break;
+                    if ($portalHome) {
+                        $portalInstDir = (Split-Path $portalHome)
+                        if (((Get-Item($portalInstDir)).Name -eq 
+                            (Get-Item($this.InstallationDirectory)).Name) -and (
+                            (Get-Item($portalInstDir)).Parent.FullName -eq 
+                            (Get-Item($this.InstallationDirectory)).Parent.FullName)) {
+                            $RetInsDir = $this.InstallationDirectory
+                            $wpEdition = $this.PortalEdition.ToString()
+                            # Ensure that it is the right Portal Edition (i.e. WCM vs EXPRESS vs MP)
+                            if ($wpVersionInfo.Products[$wpEdition]) {
+                                $RetWPEdition = $this.PortalEdition
+                                $RetVersion = $wpVersionInfo.Products[$wpEdition].Version
+                            } elseif ($wpVersionInfo.Products.Keys.Count -gt 0) {
+                                ForEach ($wpProduct in $wpVersionInfo.Products.Keys) {
+                                    if (!((@('MP','CFGFW')).Contains($wpProduct))) {
+                                        $RetWPEdition = $wpProduct
+                                        $RetVersion = $wpVersionInfo.Products.$wpProduct.Version
+                                        break;
+                                    }
+                                }
+                                if (!($RetWPEdition)) {
+                                    $RetWPEdition = [PortalEdition]::MP
+                                    $RetVersion = $wpVersionInfo.Products.MP.Version
                                 }
                             }
-                            if (!($RetWPEdition)) {
-                                $RetWPEdition = [PortalEdition]::MP
-                                $RetVersion = $wpVersionInfo.Products.MP.Version
-                            }
+                        } else {
+                            $RetInsDir = (Split-Path $portalHome)
                         }
-                    } elseif ($portalHome) {
-                        $RetInsDir = (Split-Path $portalHome)
                     }
                     # Retreive the current topology, if it doesn't match return the current topology
                     $wpProfilePath = Join-Path -Path ($this.InstallationDirectory) -ChildPath ($this.ProfileName)
