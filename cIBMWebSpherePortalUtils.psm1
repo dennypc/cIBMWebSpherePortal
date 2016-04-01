@@ -245,3 +245,237 @@ Function Install-IBMWebSpherePortal() {
 
     Return $installed
 }
+
+##############################################################################################################
+# Invoke-ConfigEngine
+#   Wrapper cmdlet for running ConfigEngine.  Returns object with stdout,stderr, and exit code
+##############################################################################################################
+Function Invoke-ConfigEngine() {
+    [CmdletBinding(SupportsShouldProcess=$False)]
+    Param (
+        [parameter(Mandatory=$true,position=0)]
+        [string] $ConfigEngineDir,
+
+        [parameter(Mandatory=$true,position=1)]
+        [string[]] $Tasks,
+        
+        [parameter(Mandatory=$false,position=2)]
+        [string] $OutputFilter,
+
+        [parameter(Mandatory=$false,position=3)]
+        [PSCredential] $WebSphereAdministratorCredential,
+        
+        [parameter(Mandatory=$false,position=4)]
+        [PSCredential] $PortalAdministratorCredential,
+        
+        [switch]
+        $DiscardStandardOut,
+
+        [switch]
+        $DiscardStandardErr
+    )
+
+    $success = $false
+    
+    [PSCustomObject] $cfgEngineProcess = @{
+        StdOut = $null
+        StdErr = $null
+        ExitCode = $null
+    }
+
+    $cfgEngineBatch = Join-Path -Path $ConfigEngineDir -ChildPath "ConfigEngine.bat"
+
+    if (Test-Path($cfgEngineBatch)) {
+        if ($WebSphereAdministratorCredential) {
+            $wasPwd = $WebSphereAdministratorCredential.GetNetworkCredential().Password
+            $Tasks += "-DWasPassword=$wasPwd"
+        }
+        if ($PortalAdministratorCredential) {
+            $wpPwd = $PortalAdministratorCredential.GetNetworkCredential().Password
+            $Tasks += "-DPortalAdminPwd=$wpPwd"
+        }
+        
+        $discStdOut = $DiscardStandardOut.IsPresent
+        $discStdErr = $DiscardStandardErr.IsPresent
+
+        $cfgEngineProcess = Invoke-ProcessHelper -ProcessFileName $cfgEngineBatch -ProcessArguments $Tasks `
+                                -WorkingDirectory $ConfigEngineDir -DiscardStandardOut:$discStdOut -DiscardStandardErr:$discStdErr
+        if ($cfgEngineProcess -and (!($cfgEngineProcess.StdErr)) -and ($cfgEngineProcess.ExitCode -eq 0)) {
+            $buildFailures = Select-String -InputObject $cfgEngineProcess.StdOut -Pattern "BUILD FAILED" -AllMatches
+            $success = ($buildFailures.Matches.Count -eq 0)
+            if ($success -and (!([string]::IsNullOrEmpty($OutputFilter)))) {
+                [string[]] $filteredOutput = $null
+                ($cfgEngineProcess.StdOut -split [environment]::NewLine) | ? {
+                    if (([string]$_).Contains($OutputFilter)) {
+                        $filteredOutput += $_
+                    }
+                }
+                if ($filteredOutput) {
+                    $cfgEngineProcess.StdOut = $filteredOutput
+                }
+            } else {
+                if (!($success)) {
+                    Write-Error "Build failures detected in ConfigEngine, please check ConfigEngine.log"
+                }
+            }
+        } else {
+            $errorMsg = $null
+            if ($cfgEngineProcess -and $cfgEngineProcess.StdErr) {
+                $errorMsg = $cfgEngineProcess.StdErr
+            } else {
+                $errorMsg = $cfgEngineProcess.StdOut
+            }
+            $exitCode = (&{if($cfgEngineProcess) {$cfgEngineProcess.ExitCode} else {$null}})
+            Write-Error "An error occurred while executing ConfigEngine.bat process. ExitCode: $exitCode Mesage: $errorMsg"
+        } 
+    } else {
+        Write-Error "Config Engine Batch file not found on directory $ConfigEngineDir"
+    }
+    
+    if (!$success -and ($cfgEngineProcess.ExitCode -eq 0)) {
+        $cfgEngineProcess.ExitCode = -1
+    }
+
+    Return $cfgEngineProcess
+}
+
+##############################################################################################################
+# Install-IBMWebSpherePortalCumulativeFix
+#   Installs IBM WebSphere Portal Cumulative Fix on the current machine
+##############################################################################################################
+Function Install-IBMWebSpherePortalCumulativeFix() {
+    [CmdletBinding(SupportsShouldProcess=$False)]
+    param (
+		[parameter(Mandatory = $true)]
+        [string] $InstallationDirectory,
+        
+        [parameter(Mandatory = $true)]
+        [string] $ProfilePath,
+
+        [parameter(Mandatory = $true)]
+        [version] $Version,
+        
+        [parameter(Mandatory = $true)]
+        [int] $CFLevel,
+                
+        [bool] $DevMode = $false,
+        
+        [parameter(Mandatory = $true)]
+        [PSCredential] $WebSphereAdministratorCredential,
+        
+        [PSCredential] $PortalAdministratorCredential,
+
+    	[parameter(Mandatory = $true)]
+		[string[]] $SourcePath,
+
+        [PSCredential] $SourcePathCredential
+	)
+    
+    Write-Verbose "Installing CF: $CFLevel to Portal: $Version"
+    $updated = $false
+    
+    $cfgEnginePath = Join-Path -Path $ProfilePath -ChildPath "ConfigEngine"
+    
+    # Temporarily update wkplc.properties with passwords
+    $wpConfigPropertiesFile = Join-Path -Path $cfgEnginePath -ChildPath "properties\wkplc.properties"
+    if (!(Test-Path($wpConfigPropertiesFile) -PathType Leaf)) {
+        Write-Error "Unable to locate wkplc properties file"
+        Return $false
+    }
+    # Backup Files
+    Copy-Item -Path $wpConfigPropertiesFile -Destination "$wpConfigPropertiesFile.bak.$(get-date -f yyyyMMddHHmmss)"
+    
+    [hashtable] $wpconfigprops = @{}
+    $wpconfigprops.Add("WasPassword", $WebSphereAdministratorCredential.GetNetworkCredential().Password)
+    if ($PortalAdministratorCredential) {
+        $wpconfigprops.Add("PortalAdminPwd", $PortalAdministratorCredential.GetNetworkCredential().Password)
+    } else {
+        $wpconfigprops.Add("PortalAdminPwd", $WebSphereAdministratorCredential.GetNetworkCredential().Password)
+    }
+    if (!($DevMode)) {
+        $wpconfigprops.Add("PWordDelete", "true")
+    }
+    Set-JavaProperties $wpConfigPropertiesFile $wpconfigprops
+    
+    # Perform the right steps based on Portal Version / CF Level
+    $baseVerObj = (New-Object -TypeName System.Version -ArgumentList "8.0.0.1")
+    if ($Version.CompareTo($baseVerObj) -ge 0) {
+        if (($Version.CompareTo($baseVerObj) -gt 0) -or (($Version.CompareTo($baseVerObj) -eq 0) -and ($CFLevel -ge 15))) {
+            [string] $productId = $null
+            if ($Version.CompareTo($baseVerObj) -eq 0) {
+                $productId = "com.ibm.websphere.PORTAL.SERVER.v80"
+            } else {
+                $productId = "com.ibm.websphere.PORTAL.SERVER.v85"
+            }
+            
+            [bool] $updated = $false
+            [string] $wpHome = Join-Path -Path $InstallationDirectory -ChildPath "PortalServer"
+            
+            if (Test-Path $wpHome -PathType Container) {
+                Write-Verbose "Install CF binaries via IIM"
+                $updated = Install-IBMProductViaCmdLine -ProductId $productId -InstallationDirectory $wpHome `
+                            -SourcePath $SourcePath -SourcePathCredential $SourcePathCredential -ErrorAction Stop
+                if ($updated) {
+                    # Additional Configuration Steps
+                    if ($Version.ToString(2) -eq "8.5") {
+                        if ($CFLevel -lt 8) {
+                            Write-Verbose "Running PRE-APPLY-FIX config engine task (Mandatory until CF07)"
+                            $cfgEngineProc = Invoke-ConfigEngine -ConfigEngineDir $cfgEnginePath -Tasks "PRE-APPLY-FIX"
+                            if ($cfgEngineProc.ExitCode -eq 0) {
+                                Write-Verbose "Running APPLY-FIX config engine task (Mandatory until CF07)"
+                                $cfgEngineProc = Invoke-ConfigEngine -ConfigEngineDir $cfgEnginePath -Tasks "APPLY-FIX"
+                                if ($cfgEngineProc.ExitCode -ne 0) {
+                                    Write-Error "Error while executing config engine task: APPLY-FIX"
+                                }
+                            } else {
+                                Write-Error "Error while executing config engine task: PRE-APPLY-FIX"
+                            }
+                        } else {
+                            Write-Verbose "Running applyCF.bat additional configuration step (Mandatory starting on WP 8.5 CF08)"
+                            $wpBinDir = Join-Path -Path $ProfilePath -ChildPath "PortalServer\bin\"
+                            $applyCFbatch = Join-Path -Path $wpBinDir -ChildPath "applyCF.bat"
+                            $wpPwd = $null
+                            $wasPwd = $WebSphereAdministratorCredential.GetNetworkCredential().Password
+                            if ($PortalAdministratorCredential) {
+                                $wpPwd = $PortalAdministratorCredential.GetNetworkCredential().Password
+                            } else {
+                                $wpPwd = $wasPwd
+                            }
+                            if (Test-Path($applyCFbatch)) {
+                                $applyProcess = Invoke-ProcessHelper -ProcessFileName $applyCFbatch -WorkingDirectory $wpBinDir `
+                                                        -ProcessArguments @("-DPortalAdminPwd=$wpPwd", "-DWasPassword=$wasPwd")
+                                if ($applyProcess -and (!($applyProcess.StdErr)) -and ($applyProcess.ExitCode -eq 0)) {
+                                    Write-Verbose $applyProcess.StdOut
+                                } else {
+                                    $errorMsg = $null
+                                    if ($applyProcess -and $applyProcess.StdErr) {
+                                        $errorMsg = $applyProcess.StdErr
+                                    } else {
+                                        $errorMsg = $applyProcess.StdOut
+                                    }
+                                    $exitCode = (&{if($applyProcess) {$applyProcess.ExitCode} else {$null}})
+                                    Write-Error "An error occurred while executing applyCF.bat. ExitCode: $exitCode Mesage: $errorMsg"
+                                }
+                            } else {
+                                Write-Error "Invalid applyCF.bat file location: $applyCFbatch"
+                            }
+                        }
+                    } else {
+                        Write-Error "Portal Version not supported"
+                    }
+                } else {
+                    Write-Error "Unable to install the CF binaries, please check IIM logs"
+                }
+            } else {
+                Write-Error "Portal Home directory not valid: $wpHome"
+            }
+        } else {
+            # Prior to CF 15 (WP 8.0.0.1)
+            Write-Error "Portal 8.0.0.1 CF Level not supported (it should be CF15 or greater)"
+        }
+    } else {
+        Write-Error "Only Cumulative Fixes for Portal 8.5 or Portal 8.0.0.1 are supported"
+    }
+    
+    Return $updated
+}
