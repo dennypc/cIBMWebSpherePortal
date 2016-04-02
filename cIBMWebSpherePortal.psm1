@@ -437,7 +437,7 @@ class cIBMWebSpherePortalCumulativeFix {
         }
         if (!($RetCFLevel)) {
             [int] $cfNumber = [int]$RetCFLevel.Substring(2)
-            $returnValue.Add('CFLevel', cfNumber)
+            $returnValue.Add('CFLevel', $cfNumber)
         }
         if ($RetWPEdition -ne $null) {
             $returnValue.Add('PortalEdition', $RetWPEdition)
