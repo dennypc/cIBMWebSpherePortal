@@ -329,11 +329,16 @@ class cIBMWebSpherePortalCumulativeFix {
                 if ((Test-Path $portalDir) -and (Test-Path $profilePath)) {
                     Write-Verbose "Starting installation of IBM WebSphere Portal Cumulative Fix: $cfLevelStr"
                     
-                    Install-IBMWebSpherePortalCumulativeFix -InstallationDirectory (Split-Path $WASInsDir) `
+                    $updated = Install-IBMWebSpherePortalCumulativeFix -InstallationDirectory (Split-Path $WASInsDir) `
                             -ProfilePath $profilePath -Version $wpVersionObj -CFLevel $this.CFLevel -DevMode $false `
                             -WebSphereAdministratorCredential $this.WebSphereAdministratorCredential `
                             -PortalAdministratorCredential $this.PortalAdministratorCredential `
                             -SourcePath $this.SourcePath -SourcePathCredential $this.SourcePathCredential
+                    if ($updated) {
+                        Write-Verbose "IBM WebSphere Portal Cumulative Fix: $cfLevelStr Applied Successfully"
+                    } else {
+                        Write-Error "Unable to install Portal Cumulative Fix. An unknown error occurred, please check logs"
+                    }
                 } else {
                     Write-Error "Unable to install Portal Cumulative Fix. Portal not installed"
                 }
@@ -377,6 +382,7 @@ class cIBMWebSpherePortalCumulativeFix {
         $RetVersion = $null
         $RetWPEdition = $null
         $RetInsDir = $null
+        $RetCFLevel = $null
 
         # Check if WAS ND is installed / Portal depends on it
         $WASInsDir = Get-IBMWebSphereAppServerInstallLocation -WASEdition ND
@@ -384,31 +390,35 @@ class cIBMWebSpherePortalCumulativeFix {
         if($WASInsDir -and (Test-Path($WASInsDir))) {
             Write-Verbose "IBM WAS ND is Present"
             # Attempt to retrieve the Portal version information
-            $portalDir = Join-Path -Path (Split-Path $WASInsDir) -ChildPath "PortalServer"
+            $instDir = (Split-Path $WASInsDir)
+            $portalDir = Join-Path $instDir "PortalServer"
             if ($portalDir -and (Test-Path $portalDir)) {
-                $wpVersionInfo = Get-IBMWebSpherePortalVersionInfo $portalDir -ErrorAction Continue
+                $wpVersionInfo = Get-IBMWebSpherePortalVersionInfo $instDir -ErrorAction Continue
                 if ($wpVersionInfo -and $wpVersionInfo["Product Directory"]) {
                     Write-Verbose "IBM WebSphere Portal is Present"
                     $portalHome = $wpVersionInfo["Product Directory"]
                     $RetEnsure = [Ensure]::Present
                     if ($portalHome) {
-                        $RetInsDir = $portalDir
+                        $RetInsDir = $instDir
                         $wpEdition = $this.PortalEdition.ToString()
                         # Ensure that it is the right Portal Edition (i.e. WCM vs EXPRESS vs MP)
                         if ($wpVersionInfo.Products[$wpEdition]) {
                             $RetWPEdition = $this.PortalEdition
                             $RetVersion = $wpVersionInfo.Products[$wpEdition].Version
+                            $RetCFLevel = $wpVersionInfo.Products[$wpEdition]."Installed Fix"
                         } elseif ($wpVersionInfo.Products.Keys.Count -gt 0) {
                             ForEach ($wpProduct in $wpVersionInfo.Products.Keys) {
                                 if (!((@('MP','CFGFW')).Contains($wpProduct))) {
                                     $RetWPEdition = $wpProduct
-                                    $RetVersion = $wpVersionInfo.Products.$wpProduct.Version
+                                    $RetVersion = $wpVersionInfo.Products[$wpProduct].Version
+                                    $RetCFLevel = $wpVersionInfo.Products[$wpProduct]."Installed Fix"
                                     break;
                                 }
                             }
                             if (!($RetWPEdition)) {
                                 $RetWPEdition = [PortalEdition]::MP
                                 $RetVersion = $wpVersionInfo.Products.MP.Version
+                                $RetCFLevel = $wpVersionInfo.Products.MP."Installed Fix"
                             }
                         }
                     }
@@ -424,7 +434,10 @@ class cIBMWebSpherePortalCumulativeFix {
             Ensure = $RetEnsure
             InstallationDirectory = $RetInsDir
             Version = $RetVersion
-            CFLevel = 0
+        }
+        if (!($RetCFLevel)) {
+            [int] $cfNumber = [int]$RetCFLevel.Substring(2)
+            $returnValue.Add('CFLevel', cfNumber)
         }
         if ($RetWPEdition -ne $null) {
             $returnValue.Add('PortalEdition', $RetWPEdition)
