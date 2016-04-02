@@ -435,7 +435,7 @@ class cIBMWebSpherePortalCumulativeFix {
             InstallationDirectory = $RetInsDir
             Version = $RetVersion
         }
-        if (!($RetCFLevel)) {
+        if ($RetCFLevel) {
             [int] $cfNumber = [int]$RetCFLevel.Substring(2)
             $returnValue.Add('CFLevel', $cfNumber)
         }
