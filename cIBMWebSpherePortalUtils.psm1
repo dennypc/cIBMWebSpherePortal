@@ -30,6 +30,20 @@ $PortalConfigPropertyMap = @{
     ([PortalConfig]::ConfigWizardProfilePath.ToString()) = "cwProfileHome"
 }
 
+enum DatabaseType {
+    SQLSERVER
+    DB2
+    ORACLE
+    DERBY
+}
+
+$DatabaseTypeMap = @{
+    ([DatabaseType]::SQLSERVER.ToString()) = "sqlserver2005";
+    ([DatabaseType]::DB2.ToString()) = "db2";
+    ([DatabaseType]::ORACLE.ToString()) = "oracle";
+    ([DatabaseType]::DERBY.ToString()) = "derby"
+}
+
 ##############################################################################################################
 # Get-IBMWebSpherePortalInstallLocation
 #   Returns the location where IBM WebSphere Application Server is installed
@@ -97,7 +111,11 @@ Function Get-IBMPortalConfig() {
         $portalConfigMap.Add(([PortalConfig]::Version.ToString()), $versionObj)
 
         [string] $cfStr = $wpsProps[$PortalConfigPropertyMap[[PortalConfig]::CFLevel.ToString()]]
-        [int] $cfNumber = [int]$cfStr.Substring(2)
+        [int] $cfNumber = 0
+        if ($cfStr -and ($cfStr.Length -gt 1)) {
+            $cfNumber = [int]$cfStr.Substring(2)
+        }
+        
         $portalConfigMap.Add(([PortalConfig]::CFLevel.ToString()), $cfNumber)
 
         [string] $cwProfilePath = $wpsProps[$PortalConfigPropertyMap[[PortalConfig]::ConfigWizardProfilePath.ToString()]]
@@ -682,4 +700,289 @@ Function Install-IBMWebSpherePortalCumulativeFix() {
     }
     
     Return $updated
+}
+
+##############################################################################################################
+# Initialize-PortalDatabaseTransfer
+#   Initializes the wkplc property files in order to perform the database transfer
+##############################################################################################################
+Function Initialize-PortalDatabaseTransfer() {
+    param (
+        [parameter(Mandatory = $true)]
+        [DatabaseType] $PortalDatabaseType = [DatabaseType]::SQL_SERVER,
+
+        [parameter(Mandatory = $true)]
+        [String] $DatabaseHostName,
+
+        [parameter(Mandatory = $false)]
+        [String] $DatabaseInstanceName,
+
+        [parameter(Mandatory = $true)]
+        [Int] $DatabasePort = 1433,
+
+        [parameter(Mandatory = $false)]
+        [String] $DatabaseInstanceHomeDirectory,
+
+        [parameter(Mandatory = $true)]
+        [Microsoft.Management.Infrastructure.CimInstance[]] $PortalDatabaseConfig,
+
+        [parameter(Mandatory = $true)]
+        [String] $JDBCDriverPath,
+        
+        [parameter(Mandatory = $false)]
+        [PSCredential] $DBACredential,
+
+        [parameter(Mandatory = $true)]
+        [PSCredential] $WebSphereAdministratorCredential,
+        
+        [parameter(Mandatory=$true)]
+        [PSCredential] $RelDBCredential,
+        
+        [bool]
+        $SameDBCredentials = $true,
+        
+        [parameter(Mandatory=$false)]
+        [PSCredential] $CommDBCredential,
+        
+        [parameter(Mandatory=$false)]
+        [PSCredential] $CustDBCredential,
+        
+        [parameter(Mandatory=$false)]
+        [PSCredential] $JcrDBCredential,
+        
+        [parameter(Mandatory=$false)]
+        [PSCredential] $LmDBCredential,
+        
+        [parameter(Mandatory=$false)]
+        [PSCredential] $FdbkDBCredential
+    )
+
+    $portalConfig = Get-IBMPortalConfig
+    $cfgEnginePath = $portalConfig[[PortalConfig]::ProfileConfigEnginePath.ToString()]
+
+    $wpConfigPropertiesFile = Join-Path $cfgEnginePath "properties\wkplc.properties"
+    $wpdbdomainPropertiesFile = Join-Path $cfgEnginePath "properties\wkplc_dbdomain.properties"
+    $wpdbtypePropertiesFile = Join-Path $cfgEnginePath "properties\wkplc_dbtype.properties"
+
+    if ((!(Test-Path($wpdbdomainPropertiesFile))) -or (!(Test-Path($wpdbtypePropertiesFile))) -or (!(Test-Path($wpConfigPropertiesFile)))) {
+        Write-Error "Unable to locate wkplc_dbdomain or wkplc_dbtype propertie files"
+        Return $false
+    }
+
+    if (!($PortalDatabaseConfig.CimInstanceProperties)) {
+        Write-Error "Database configuration not specified"
+        Return $false
+    }
+
+    # Backup Files
+    Copy-Item -Path $wpdbdomainPropertiesFile -Destination "$wpdbdomainPropertiesFile.bak.$(get-date -f yyyyMMddHHmmss)"
+    Copy-Item -Path $wpdbtypePropertiesFile -Destination "$wpdbtypePropertiesFile.bak.$(get-date -f yyyyMMddHHmmss)"
+
+    [hashtable] $dbdomainprops = @{}
+    [hashtable] $dbtypeprops = @{}
+
+    #Convert from CimInstance[] back to hashtable
+    $PortalDBConfig = @{
+        DbDomains = @()
+    }
+    $tempDbDomain = @{}
+    $tempkeySet = @()
+    for ($i=0; $i -lt $PortalDatabaseConfig.Count; $i++) {
+        [Microsoft.Management.Infrastructure.CimInstance] $item = $PortalDatabaseConfig.Get($i)
+        if ($tempkeySet.Contains($item.Key)) {
+            $PortalDBConfig.DbDomains += $tempDbDomain
+            $tempkeySet.Clear()
+            $tempDbDomain = $null
+            $tempDbDomain = @{}
+        }
+        $tempkeySet += $item.Key
+        $tempDbDomain += @{$item.Key = $item.Value}
+        if ($i -eq ($PortalDatabaseConfig.Count - 1)) {
+            $PortalDBConfig.DbDomains += $tempDbDomain
+        }
+    }
+
+    Foreach ($dbDomain in $PortalDBConfig.DbDomains) {
+        $dbDomainName = $dbDomain.DomainName
+        $dbdomainprops.Add("$dbDomainName.DbType", $DatabaseTypeMap[$PortalDatabaseType.ToString()])
+        
+        # Set Global DB Configuration
+        if ($PortalDatabaseType -eq [DatabaseType]::SQL_SERVER) {
+            $baseSQLServerURL = "jdbc:sqlserver://$DatabaseHostName`:$DatabasePort"
+            if ($DatabaseInstanceName) {
+                $baseSQLServerURL = $baseSQLServerURL + ";instanceName=$DatabaseInstanceName"
+            }
+            $dbURL = $baseSQLServerURL + ";SelectMethod=cursor;DatabaseName=" + $dbDomain.DatabaseName
+            $dbdomainprops.Add("$dbDomainName.DbUrl", $dbURL)
+            $dbdomainprops.Add("$dbDomainName.AdminUrl", $baseSQLServerURL)
+            $dbdomainprops.Add("$dbDomainName.DbHostName", $DatabaseHostName)
+
+            # Setup DbHome for SQL Server
+            if ($DatabaseInstanceHomeDirectory) {
+                $dbdomainprops.Add("$dbDomainName.DbHome", ($DatabaseInstanceHomeDirectory -replace "\\","\\"))
+            }
+        } else {
+            #TODO: Add support for other database types
+            Write-Error "Database type not supported"
+        }
+
+        if ($DBACredential) {
+            $dbdomainprops.Add("$dbDomainName.DBA.DbUser", $DBACredential.UserName)
+            $dbdomainprops.Add("$dbDomainName.DBA.DbPassword", $DBACredential.GetNetworkCredential().Password)
+        }
+        
+        # Set Database-Specific Config
+        if ($SameDBCredentials) {
+            $dbdomainprops.Add("$dbDomainName.DbUser", $RelDBCredential.UserName)
+            $dbdomainprops.Add("$dbDomainName.DbPassword", $RelDBCredential.GetNetworkCredential().Password)
+        }
+
+        $dbdomainprops.Add("$dbDomainName.DbName", $dbDomain.DatabaseName)
+        $dbdomainprops.Add("$dbDomainName.DbSchema", $dbDomain.Schema)
+        $dbdomainprops.Add("$dbDomainName.DataSourceName", $dbDomain.DataSourceName)
+    }
+    
+    if (!($SameDBCredentials)) {
+        $dbdomainprops.Add("release.DbUser", $RelDBCredential.UserName)
+        $dbdomainprops.Add("release.DbPassword", $RelDBCredential.GetNetworkCredential().Password)
+        $dbdomainprops.Add("community.DbUser", $CommDBCredential.UserName)
+        $dbdomainprops.Add("community.DbPassword", $CommDBCredential.GetNetworkCredential().Password)
+        $dbdomainprops.Add("customization.DbUser", $CustDBCredential.UserName)
+        $dbdomainprops.Add("customization.DbPassword", $CustDBCredential.GetNetworkCredential().Password)
+        $dbdomainprops.Add("jcr.DbUser", $JcrDBCredential.UserName)
+        $dbdomainprops.Add("jcr.DbPassword", $JcrDBCredential.GetNetworkCredential().Password)
+        $dbdomainprops.Add("likeminds.DbUser", $LmDBCredential.UserName)
+        $dbdomainprops.Add("likeminds.DbPassword", $LmDBCredential.GetNetworkCredential().Password)
+        $dbdomainprops.Add("feedback.DbUser", $FdbkDBCredential.UserName)
+        $dbdomainprops.Add("feedback.DbPassword", $FdbkDBCredential.GetNetworkCredential().Password)
+    }
+
+    if ($PortalDatabaseType -eq [DatabaseType]::SQL_SERVER) {
+        $dbtypeprops.Add("sqlserver2005.DbLibrary", ($JDBCDriverPath -replace "\\","/"))
+    } else {
+        #TODO: Add support for other database types
+        Return $false
+    }
+
+    # Update Property Files
+    Set-JavaProperties $wpdbdomainPropertiesFile $dbdomainprops
+    Set-JavaProperties $wpdbtypePropertiesFile $dbtypeprops
+
+    Return $true
+}
+
+##############################################################################################################
+# Invoke-DatabaseTransfer
+#   Performs a database transfer from derby to the target database specified
+##############################################################################################################
+Function Invoke-DatabaseTransfer {
+	[CmdletBinding()]
+	param (
+        [parameter(Mandatory = $true)]
+        [DatabaseType] $PortalDatabaseType = [DatabaseType]::SQL_SERVER,
+        
+        [parameter(Mandatory = $true)]
+		[String] $DatabaseHostName,
+
+		[String] $DatabaseInstanceHomeDirectory,
+
+		[parameter(Mandatory = $true)]
+		[Microsoft.Management.Infrastructure.CimInstance[]]
+		$DatabaseConfig,
+
+		[String] $DatabaseInstanceName,
+
+		[parameter(Mandatory = $true)]
+		[Int] $DatabasePort,
+        
+        [String] $JDBCDriverPath,
+        
+        [parameter(Mandatory = $false)]
+        [PSCredential] $DBACredential,
+
+        [parameter(Mandatory = $true)]
+        [PSCredential] $WebSphereAdministratorCredential,
+        
+        [parameter(Mandatory=$true)]
+        [PSCredential] $RelDBCredential,
+        
+        [bool]
+        $SameDBCredentials = $true,
+        
+        [parameter(Mandatory=$false)]
+        [PSCredential] $CommDBCredential,
+        
+        [parameter(Mandatory=$false)]
+        [PSCredential] $CustDBCredential,
+        
+        [parameter(Mandatory=$false)]
+        [PSCredential] $JcrDBCredential,
+        
+        [parameter(Mandatory=$false)]
+        [PSCredential] $LmDBCredential,
+        
+        [parameter(Mandatory=$false)]
+        [PSCredential] $FdbkDBCredential
+	)
+    
+    $portalConfig = Get-IBMPortalConfig
+    $cfgEnginePath = $portalConfig[[PortalConfig]::ProfileConfigEnginePath.ToString()]
+    $profilePath = $portalConfig[[PortalConfig]::ProfilePath.ToString()]
+    
+    # Initialize the database transfer
+    $initialized = Initialize-PortalDatabaseTransfer -PortalDatabaseType $PortalDatabaseType `
+                    -DatabaseHostName $DatabaseHostName -DatabaseInstanceName $DatabaseInstanceName -DatabasePort $DatabasePort `
+                    -DatabaseInstanceHomeDirectory $DatabaseInstanceHomeDirectory -PortalDatabaseConfig $DatabaseConfig `
+                    -JDBCDriverPath $JDBCDriverPath -WebSphereAdministratorCredential $WebSphereAdministratorCredential `
+                    -DBACredential $DBACredential -RelDBCredential $RelDBCredential -SameDBCredentials $SameDBCredentials `
+                    -CommDBCredential $CommDBCredential -CustDBCredential $CustDBCredential -JcrDBCredential $JcrDBCredential `
+                    -LmDBCredential $LmDBCredential -FdbkDBCredential $FdbkDBCredential
+
+    if ($initialized) {
+        # Backup icm.properties in case the database transfer fails
+        #$icm_file_path = Join-Path -Path $ProfilePath -ChildPath $ICM_PROP_FILE_SUFFIX
+        #Copy-Item -Path $icm_file_path -Destination "$icm_file_path.bak.$(get-date -f yyyyMMddHHmmss)"
+
+        Stop-WebSpherePortal -WebSphereAdministratorCredential $WebSphereAdministratorCredential
+
+        # Create Database
+        Write-Verbose "Creating Databases"
+        $cfgEngineProc = Invoke-ConfigEngine -Path $cfgEnginePath -Tasks "create-database"
+        $buildSuccessfull = ($cfgEngineProc -and ($cfgEngineProc.ExitCode -eq 0))
+        if ($buildSuccessfull) {
+            # Setup Database
+            Write-Verbose "Setting up Databases/Users/Schema"
+            $cfgEngineProc = Invoke-ConfigEngine -Path $cfgEnginePath -Tasks "setup-database"
+            $buildSuccessfull = ($cfgEngineProc -and ($cfgEngineProc.ExitCode -eq 0))
+            if ($buildSuccessfull) {
+                # Validate Database
+                Write-Verbose "Validate Databases"
+                $cfgEngineProc = Invoke-ConfigEngine -Path $cfgEnginePath -Tasks "validate-database"
+                $buildSuccessfull = ($cfgEngineProc -and ($cfgEngineProc.ExitCode -eq 0))
+                if ($buildSuccessfull) {
+                    # Transfer Database
+                    Write-Verbose "Tranferring Databases"
+                    sleep -s 10
+                    $cfgEngineProc = Invoke-ConfigEngine -Path $cfgEnginePath -Tasks "database-transfer" -Verbose
+                    $buildSuccessfull = ($cfgEngineProc -and ($cfgEngineProc.ExitCode -eq 0))
+                    if ($buildSuccessfull) {
+                        Write-Verbose "IBM WebSphere Portal Database Transfer SUCCESSFUL. Restarting."
+                        Stop-WebSpherePortal -WebSphereAdministratorCredential $WebSphereAdministratorCredential
+                        Start-WebSpherePortal
+                    } else {
+                        Write-Verbose "IBM WebSphere Portal Database Transfer FAILED:: An error occurred while transferring the database"
+                        Write-Error "IBM WebSphere Portal Database Transfer FAILED:: An error occurred while transferring the database"
+                    }
+                } else {
+                    Write-Error "IBM WebSphere Portal Database Transfer FAILED:: An error occurred while validating the databases"
+                }
+            } else {
+                Write-Error "IBM WebSphere Portal Database Transfer FAILED:: An error occurred while setting up the databases"
+            }
+        } else {
+            Write-Error "IBM WebSphere Portal Database Transfer FAILED:: An error occurred while creating the databases"
+        }
+    } else {
+        Write-Error "IBM WebSphere Portal Database Transfer FAILED:: unable to initialize properly"
+    }
 }
