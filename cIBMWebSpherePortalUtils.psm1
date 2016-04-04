@@ -9,24 +9,123 @@ enum PortalEdition {
     EXTEND
 }
 
+enum PortalConfig {
+    Edition
+    PortalHome
+    ProfileName
+    ProfilePath
+    ProfileConfigEnginePath
+    Version
+    CFLevel
+    ConfigWizardProfilePath
+}
+
+$PortalConfigPropertyMap = @{
+    [PortalConfig]::Edition = "WPFamilyName";
+    [PortalConfig]::PortalHome = "PortalRootDir";
+    [PortalConfig]::ProfileName = "ProfileName";
+    [PortalConfig]::ProfilePath = "ProfileDirectory";
+    [PortalConfig]::Version = "version";
+    [PortalConfig]::CFLevel = "fixlevel";
+    [PortalConfig]::ConfigWizardProfilePath = "cwProfileHome"
+}
+
+##############################################################################################################
+# Get-IBMWebSpherePortalInstallLocation
+#   Returns the location where IBM WebSphere Application Server is installed
+##############################################################################################################
+Function Get-IBMWebSpherePortalInstallLocation() {
+    [CmdletBinding(SupportsShouldProcess=$False)]
+    param (
+        [parameter(Mandatory=$false,position=0)]
+        [System.Version] $Version = "8.5.0.0"
+    )
+    $wpHome = $null
+    $wasInstDir = Get-IBMWebSphereAppServerInstallLocation -WASEdition ND -Version $Version
+    if ($wasInstDir) {
+        $wpHome = Join-Path (Split-Path $wasInstDir) "PortalServer"
+        if ($wpHome -and (Test-Path $wpHome -PathType Container)) {
+            Write-Debug "Get-IBMWebSpherePortalInstallLocation returning $wpHome"
+        } else {
+            $wpHome = $null
+        }
+    }
+    Return $wpHome
+}
+
+##############################################################################################################
+# Get-IBMWPSProperties
+#   Returns the global wps.properties
+##############################################################################################################
+Function Get-IBMWPSProperties() {
+    [CmdletBinding(SupportsShouldProcess=$False)]
+    param ()
+    [hashtable] $wpsProps = @{}
+    $wpHome = Get-IBMWebSpherePortalInstallLocation
+    $wpsPropsPath = Join-Path $wpHome "wps.properties"
+    if (Test-Path $wpsPropsPath -PathType Leaf) {
+        $wpsProps = Get-JavaProperties -PropertyFilePath $wpsPropsPath
+    }
+    Return $wpsProps
+}
+
+##############################################################################################################
+# Get-IBMPortalConfig
+#   Returns a hashtable of Portal Config settings, using the PortalConfig enum as key
+##############################################################################################################
+Function Get-IBMPortalConfig() {
+    [CmdletBinding(SupportsShouldProcess=$False)]
+    param ()
+    [hashtable] $wpsProps = Get-IBMWPSProperties
+    [hashtable] $portalConfigMap = @{}
+    if ($wpsProps -and ($wpsProps.Count -gt 0)) {
+        [string] $wpEdition = $wpsProps[$PortalConfigPropertyMap[[PortalConfig]::Edition]]
+        $portalConfigMap.Add([PortalConfig]::Edition, [System.Enum]::Parse([PortalEdition], $wpEdition, $true))
+        
+        [string] $wpHome = $wpsProps[$PortalConfigPropertyMap[[PortalConfig]::PortalHome]]
+        $wpHome = [IO.Path]::GetFullPath($wpHome)
+        $portalConfigMap.Add([PortalConfig]::PortalHome, $wpHome)
+        
+        $portalConfigMap.Add([PortalConfig]::ProfileName, $wpsProps[$PortalConfigPropertyMap[[PortalConfig]::ProfileName]])
+        
+        [string] $profilePath = $wpsProps[$PortalConfigPropertyMap[[PortalConfig]::ProfilePath]]
+        $profilePath = [IO.Path]::GetFullPath($profilePath)
+        $portalConfigMap.Add([PortalConfig]::ProfilePath, $profilePath)
+        
+        [string] $versionStr = $wpsProps[$PortalConfigPropertyMap[[PortalConfig]::Version]]
+        [version] $versionObj = (New-Object -TypeName System.Version -ArgumentList $versionStr)
+        $portalConfigMap.Add([PortalConfig]::Version, $versionObj)
+
+        [string] $cfStr = $wpsProps[$PortalConfigPropertyMap[[PortalConfig]::CFLevel]]
+        [int] $cfNumber = [int]$cfStr.Substring(2)
+        $portalConfigMap.Add([PortalConfig]::CFLevel, $cfNumber)
+
+        [string] $cwProfilePath = $wpsProps[$PortalConfigPropertyMap[[PortalConfig]::ConfigWizardProfilePath]]
+        $cwProfilePath = [IO.Path]::GetFullPath($cwProfilePath)
+        $portalConfigMap.Add([PortalConfig]::ConfigWizardProfilePath, $cwProfilePath)
+
+        $portalConfigMap.Add([PortalConfig]::ProfileConfigEnginePath, (Join-Path $profilePath "ConfigEngine"))
+    }
+    Return $portalConfigMap
+}
+
 ##############################################################################################################
 # Get-IBMWebSpherePortalVersionInfo
 #   Returns a hashtable containing version information of the IBM Portal Product/Components installed
 ##############################################################################################################
 Function Get-IBMWebSpherePortalVersionInfo() {
     [CmdletBinding(SupportsShouldProcess=$False)]
-    param (
-        [parameter(Mandatory=$true,position=0)]
-        [string]
-        $InstallationDirectory
-    )
+    param ()
+    
+    $portalConfig = Get-IBMPortalConfig
+    $portalHome = $portalConfig[[PortalConfig]::PortalHome]
 
-    Write-Verbose "Get-IBMWebSpherePortalVersionInfo::ENTRY(InstallationDirectory=$InstallationDirectory)"
+    Write-Verbose "Get-IBMWebSpherePortalVersionInfo::ENTRY"
     
     #Validate Parameters
-    [string] $versionInfoBat = Join-Path -Path $InstallationDirectory -ChildPath "PortalServer\bin\WPVersionInfo.bat"
+    [string] $versionInfoBat = Join-Path $portalHome "bin\WPVersionInfo.bat"
     if (!(Test-Path($versionInfoBat))) {
-        Write-Error "Invalid InstallationDirectory: $versionInfoBat not found"
+        Write-Error "Invalid path: $versionInfoBat not found"
         Return $null
     }
         
@@ -110,20 +209,13 @@ Function Get-IBMWebSpherePortalVersionInfo() {
 ##############################################################################################################
 Function Get-IBMWebSpherePortalFixesInstalled() {
     [CmdletBinding(SupportsShouldProcess=$False)]
-    param (
-        [parameter(Mandatory=$true,position=0)]
-        [string]
-        $InstallationDirectory
-    )
-
-    #Validate Parameters
-    if (!(Test-Path($InstallationDirectory))) {
-        Write-Error "Get-IBMWebSpherePortalFixesInstalled:ERROR:Parameter InstallationDirectory with value=$InstallationDirectory does not exists" -ForegroundColor DarkYellow
-        Return
-    }
+    param ()
+    
+    $portalConfig = Get-IBMPortalConfig
+    $portalHome = $portalConfig[[PortalConfig]::PortalHome]
     
     [string[]] $installedFixes = @()
-    $wpver_bat = Join-Path -Path $InstallationDirectory -ChildPath "\PortalServer\bin\WPVersionInfo.bat"
+    $wpver_bat = Join-Path $portalHome "bin\WPVersionInfo.bat"
     $wpver_args = @("-fixes")
     $versionInfoProcess = Invoke-ProcessHelper -ProcessFileName $wpver_bat -ProcessArguments $wpver_args
     
@@ -254,7 +346,7 @@ Function Invoke-ConfigEngine() {
     [CmdletBinding(SupportsShouldProcess=$False)]
     Param (
         [parameter(Mandatory=$true,position=0)]
-        [string] $ConfigEngineDir,
+        [string] $Path,
 
         [parameter(Mandatory=$true,position=1)]
         [string[]] $Tasks,
@@ -283,7 +375,7 @@ Function Invoke-ConfigEngine() {
         ExitCode = $null
     }
 
-    $cfgEngineBatch = Join-Path -Path $ConfigEngineDir -ChildPath "ConfigEngine.bat"
+    $cfgEngineBatch = Join-Path -Path $Path -ChildPath "ConfigEngine.bat"
 
     if (Test-Path($cfgEngineBatch)) {
         if ($WebSphereAdministratorCredential) {
@@ -299,7 +391,7 @@ Function Invoke-ConfigEngine() {
         $discStdErr = $DiscardStandardErr.IsPresent
 
         $cfgEngineProcess = Invoke-ProcessHelper -ProcessFileName $cfgEngineBatch -ProcessArguments $Tasks `
-                                -WorkingDirectory $ConfigEngineDir -DiscardStandardOut:$discStdOut -DiscardStandardErr:$discStdErr
+                                -WorkingDirectory $Path -DiscardStandardOut:$discStdOut -DiscardStandardErr:$discStdErr
         if ($cfgEngineProcess -and (!($cfgEngineProcess.StdErr)) -and ($cfgEngineProcess.ExitCode -eq 0)) {
             $buildFailures = Select-String -InputObject $cfgEngineProcess.StdOut -Pattern "BUILD FAILED" -AllMatches
             $success = ($buildFailures.Matches.Count -eq 0)
@@ -329,7 +421,7 @@ Function Invoke-ConfigEngine() {
             Write-Error "An error occurred while executing ConfigEngine.bat process. ExitCode: $exitCode Mesage: $errorMsg"
         } 
     } else {
-        Write-Error "Config Engine Batch file not found on directory $ConfigEngineDir"
+        Write-Error "Config Engine Batch file not found on directory $Path"
     }
     
     if (!$success -and ($cfgEngineProcess.ExitCode -eq 0)) {
@@ -346,35 +438,30 @@ Function Invoke-ConfigEngine() {
 Function Install-IBMWebSpherePortalCumulativeFix() {
     [CmdletBinding(SupportsShouldProcess=$False)]
     param (
-		[parameter(Mandatory = $true)]
-        [string] $InstallationDirectory,
-        
-        [parameter(Mandatory = $true)]
-        [string] $ProfilePath,
-
-        [parameter(Mandatory = $true)]
-        [version] $Version,
-        
         [parameter(Mandatory = $true)]
         [int] $CFLevel,
-                
+        
         [bool] $DevMode = $false,
         
         [parameter(Mandatory = $true)]
         [PSCredential] $WebSphereAdministratorCredential,
         
         [PSCredential] $PortalAdministratorCredential,
-
+        
     	[parameter(Mandatory = $true)]
 		[string[]] $SourcePath,
 
         [PSCredential] $SourcePathCredential
 	)
     
-    Write-Verbose "Installing CF: $CFLevel to Portal: $Version"
-    $updated = $false
+    $portalConfig = Get-IBMPortalConfig
     
-    $cfgEnginePath = Join-Path -Path $ProfilePath -ChildPath "ConfigEngine"
+    $wpVersion = $portalConfig[[PortalConfig]::Version]
+    Write-Verbose "Installing CF: $CFLevel to Portal: $wpVersion"
+    $updated = $False
+    
+    $cfgEnginePath = $portalConfig[[PortalConfig]::ProfileConfigEnginePath]
+    $wpHome = $portalConfig[[PortalConfig]::ProfileConfigEnginePath]
     
     # Temporarily update wkplc.properties with passwords
     $wpConfigPropertiesFile = Join-Path -Path $cfgEnginePath -ChildPath "properties\wkplc.properties"
@@ -399,17 +486,16 @@ Function Install-IBMWebSpherePortalCumulativeFix() {
     
     # Perform the right steps based on Portal Version / CF Level
     $baseVerObj = (New-Object -TypeName System.Version -ArgumentList "8.0.0.1")
-    if ($Version.CompareTo($baseVerObj) -ge 0) {
-        if (($Version.CompareTo($baseVerObj) -gt 0) -or (($Version.CompareTo($baseVerObj) -eq 0) -and ($CFLevel -ge 15))) {
+    if ($wpVersion.CompareTo($baseVerObj) -ge 0) {
+        if (($wpVersion.CompareTo($baseVerObj) -gt 0) -or (($wpVersion.CompareTo($baseVerObj) -eq 0) -and ($CFLevel -ge 15))) {
             [string] $productId = $null
-            if ($Version.CompareTo($baseVerObj) -eq 0) {
+            if ($wpVersion.CompareTo($baseVerObj) -eq 0) {
                 $productId = "com.ibm.websphere.PORTAL.SERVER.v80"
             } else {
                 $productId = "com.ibm.websphere.PORTAL.SERVER.v85"
             }
             
             [bool] $updated = $false
-            [string] $wpHome = Join-Path -Path $InstallationDirectory -ChildPath "PortalServer"
             
             if (Test-Path $wpHome -PathType Container) {
                 Write-Verbose "Install CF binaries via IIM"
@@ -417,13 +503,13 @@ Function Install-IBMWebSpherePortalCumulativeFix() {
                             -SourcePath $SourcePath -SourcePathCredential $SourcePathCredential -ErrorAction Stop
                 if ($updated) {
                     # Additional Configuration Steps
-                    if ($Version.ToString(2) -eq "8.5") {
+                    if ($wpVersion.ToString(2) -eq "8.5") {
                         if ($CFLevel -lt 8) {
                             Write-Verbose "Running PRE-APPLY-FIX config engine task (Mandatory until CF07)"
-                            $cfgEngineProc = Invoke-ConfigEngine -ConfigEngineDir $cfgEnginePath -Tasks "PRE-APPLY-FIX"
+                            $cfgEngineProc = Invoke-ConfigEngine -Path $cfgEnginePath -Tasks "PRE-APPLY-FIX"
                             if ($cfgEngineProc.ExitCode -eq 0) {
                                 Write-Verbose "Running APPLY-FIX config engine task (Mandatory until CF07)"
-                                $cfgEngineProc = Invoke-ConfigEngine -ConfigEngineDir $cfgEnginePath -Tasks "APPLY-FIX"
+                                $cfgEngineProc = Invoke-ConfigEngine -Path $cfgEnginePath -Tasks "APPLY-FIX"
                                 if ($cfgEngineProc.ExitCode -ne 0) {
                                     Write-Error "Error while executing config engine task: APPLY-FIX"
                                 }
@@ -432,7 +518,7 @@ Function Install-IBMWebSpherePortalCumulativeFix() {
                             }
                         } else {
                             Write-Verbose "Running applyCF.bat additional configuration step (Mandatory starting on WP 8.5 CF08)"
-                            $wpBinDir = Join-Path -Path $ProfilePath -ChildPath "PortalServer\bin\"
+                            $wpBinDir = Join-Path ($portalConfig[[PortalConfig]::PortalHome]) -ChildPath "bin"
                             $applyCFbatch = Join-Path -Path $wpBinDir -ChildPath "applyCF.bat"
                             $wpPwd = $null
                             $wasPwd = $WebSphereAdministratorCredential.GetNetworkCredential().Password

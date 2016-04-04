@@ -199,7 +199,7 @@ class cIBMWebSpherePortal {
             # Attempt to retrieve the Portal version information
             $portalDir = Join-Path -Path (Split-Path $WASInsDir) -ChildPath "PortalServer"
             if ($portalDir -and (Test-Path $portalDir)) {
-                $wpVersionInfo = Get-IBMWebSpherePortalVersionInfo ($this.InstallationDirectory) -ErrorAction Continue
+                $wpVersionInfo = Get-IBMWebSpherePortalVersionInfo -ErrorAction Continue
                 if ($wpVersionInfo -and $wpVersionInfo["Product Directory"]) {
                     Write-Verbose "IBM WebSphere Portal is Present"
                     $portalHome = $wpVersionInfo["Product Directory"]
@@ -321,7 +321,6 @@ class cIBMWebSpherePortalCumulativeFix {
         try {
             if ($this.Ensure -eq [Ensure]::Present) {
                 $cfLevelStr = $this.CFLevel
-                $wpVersionObj = (New-Object -TypeName System.Version -ArgumentList $this.Version)
                 $WASInsDir = Get-IBMWebSphereAppServerInstallLocation -WASEdition ND
                 $portalDir = Join-Path -Path (Split-Path $WASInsDir) -ChildPath "PortalServer"
                 $profilePath = Join-Path -Path (Split-Path $WASInsDir) -ChildPath $this.ProfileName
@@ -329,8 +328,7 @@ class cIBMWebSpherePortalCumulativeFix {
                 if ((Test-Path $portalDir) -and (Test-Path $profilePath)) {
                     Write-Verbose "Starting installation of IBM WebSphere Portal Cumulative Fix: $cfLevelStr"
                     
-                    $updated = Install-IBMWebSpherePortalCumulativeFix -InstallationDirectory (Split-Path $WASInsDir) `
-                            -ProfilePath $profilePath -Version $wpVersionObj -CFLevel $this.CFLevel -DevMode $false `
+                    $updated = Install-IBMWebSpherePortalCumulativeFix -CFLevel $this.CFLevel -DevMode $false `
                             -WebSphereAdministratorCredential $this.WebSphereAdministratorCredential `
                             -PortalAdministratorCredential $this.PortalAdministratorCredential `
                             -SourcePath $this.SourcePath -SourcePathCredential $this.SourcePathCredential
@@ -393,7 +391,7 @@ class cIBMWebSpherePortalCumulativeFix {
             $instDir = (Split-Path $WASInsDir)
             $portalDir = Join-Path $instDir "PortalServer"
             if ($portalDir -and (Test-Path $portalDir)) {
-                $wpVersionInfo = Get-IBMWebSpherePortalVersionInfo $instDir -ErrorAction Continue
+                $wpVersionInfo = Get-IBMWebSpherePortalVersionInfo -ErrorAction Continue
                 if ($wpVersionInfo -and $wpVersionInfo["Product Directory"]) {
                     Write-Verbose "IBM WebSphere Portal is Present"
                     $portalHome = $wpVersionInfo["Product Directory"]
