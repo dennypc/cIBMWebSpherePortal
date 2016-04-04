@@ -21,13 +21,13 @@ enum PortalConfig {
 }
 
 $PortalConfigPropertyMap = @{
-    [PortalConfig]::Edition = "WPFamilyName";
-    [PortalConfig]::PortalHome = "PortalRootDir";
-    [PortalConfig]::ProfileName = "ProfileName";
-    [PortalConfig]::ProfilePath = "ProfileDirectory";
-    [PortalConfig]::Version = "version";
-    [PortalConfig]::CFLevel = "fixlevel";
-    [PortalConfig]::ConfigWizardProfilePath = "cwProfileHome"
+    ([PortalConfig]::Edition.ToString()) = "WPFamilyName";
+    ([PortalConfig]::PortalHome.ToString()) = "PortalRootDir";
+    ([PortalConfig]::ProfileName.ToString()) = "ProfileName";
+    ([PortalConfig]::ProfilePath.ToString()) = "ProfileDirectory";
+    ([PortalConfig]::Version.ToString()) = "version";
+    ([PortalConfig]::CFLevel.ToString()) = "fixlevel";
+    ([PortalConfig]::ConfigWizardProfilePath.ToString()) = "cwProfileHome"
 }
 
 ##############################################################################################################
@@ -79,32 +79,32 @@ Function Get-IBMPortalConfig() {
     [hashtable] $wpsProps = Get-IBMWPSProperties
     [hashtable] $portalConfigMap = @{}
     if ($wpsProps -and ($wpsProps.Count -gt 0)) {
-        [string] $wpEdition = $wpsProps[$PortalConfigPropertyMap[[PortalConfig]::Edition]]
-        $portalConfigMap.Add([PortalConfig]::Edition, [System.Enum]::Parse([PortalEdition], $wpEdition, $true))
+        [string] $wpEdition = $wpsProps[$PortalConfigPropertyMap[[PortalConfig]::Edition.ToString()]]
+        $portalConfigMap.Add(([PortalConfig]::Edition.ToString()), [System.Enum]::Parse([PortalEdition], $wpEdition, $true))
         
-        [string] $wpHome = $wpsProps[$PortalConfigPropertyMap[[PortalConfig]::PortalHome]]
+        [string] $wpHome = $wpsProps[$PortalConfigPropertyMap[[PortalConfig]::PortalHome.ToString()]]
         $wpHome = [IO.Path]::GetFullPath($wpHome)
-        $portalConfigMap.Add([PortalConfig]::PortalHome, $wpHome)
+        $portalConfigMap.Add(([PortalConfig]::PortalHome.ToString()), $wpHome)
         
-        $portalConfigMap.Add([PortalConfig]::ProfileName, $wpsProps[$PortalConfigPropertyMap[[PortalConfig]::ProfileName]])
+        $portalConfigMap.Add(([PortalConfig]::ProfileName.ToString()), $wpsProps[$PortalConfigPropertyMap[[PortalConfig]::ProfileName.ToString()]])
         
-        [string] $profilePath = $wpsProps[$PortalConfigPropertyMap[[PortalConfig]::ProfilePath]]
+        [string] $profilePath = $wpsProps[$PortalConfigPropertyMap[[PortalConfig]::ProfilePath.ToString()]]
         $profilePath = [IO.Path]::GetFullPath($profilePath)
-        $portalConfigMap.Add([PortalConfig]::ProfilePath, $profilePath)
+        $portalConfigMap.Add(([PortalConfig]::ProfilePath.ToString()), $profilePath)
         
-        [string] $versionStr = $wpsProps[$PortalConfigPropertyMap[[PortalConfig]::Version]]
+        [string] $versionStr = $wpsProps[$PortalConfigPropertyMap[[PortalConfig]::Version.ToString()]]
         [version] $versionObj = (New-Object -TypeName System.Version -ArgumentList $versionStr)
-        $portalConfigMap.Add([PortalConfig]::Version, $versionObj)
+        $portalConfigMap.Add(([PortalConfig]::Version.ToString()), $versionObj)
 
-        [string] $cfStr = $wpsProps[$PortalConfigPropertyMap[[PortalConfig]::CFLevel]]
+        [string] $cfStr = $wpsProps[$PortalConfigPropertyMap[[PortalConfig]::CFLevel.ToString()]]
         [int] $cfNumber = [int]$cfStr.Substring(2)
-        $portalConfigMap.Add([PortalConfig]::CFLevel, $cfNumber)
+        $portalConfigMap.Add(([PortalConfig]::CFLevel.ToString()), $cfNumber)
 
-        [string] $cwProfilePath = $wpsProps[$PortalConfigPropertyMap[[PortalConfig]::ConfigWizardProfilePath]]
+        [string] $cwProfilePath = $wpsProps[$PortalConfigPropertyMap[[PortalConfig]::ConfigWizardProfilePath.ToString()]]
         $cwProfilePath = [IO.Path]::GetFullPath($cwProfilePath)
-        $portalConfigMap.Add([PortalConfig]::ConfigWizardProfilePath, $cwProfilePath)
+        $portalConfigMap.Add(([PortalConfig]::ConfigWizardProfilePath.ToString()), $cwProfilePath)
 
-        $portalConfigMap.Add([PortalConfig]::ProfileConfigEnginePath, (Join-Path $profilePath "ConfigEngine"))
+        $portalConfigMap.Add(([PortalConfig]::ProfileConfigEnginePath.ToString()), (Join-Path $profilePath "ConfigEngine"))
     }
     Return $portalConfigMap
 }
@@ -118,7 +118,7 @@ Function Get-IBMWebSpherePortalVersionInfo() {
     param ()
     
     $portalConfig = Get-IBMPortalConfig
-    $portalHome = $portalConfig[[PortalConfig]::PortalHome]
+    $portalHome = $portalConfig[[PortalConfig]::PortalHome.ToString()]
 
     Write-Verbose "Get-IBMWebSpherePortalVersionInfo::ENTRY"
     
@@ -212,7 +212,7 @@ Function Get-IBMWebSpherePortalFixesInstalled() {
     param ()
     
     $portalConfig = Get-IBMPortalConfig
-    $portalHome = $portalConfig[[PortalConfig]::PortalHome]
+    $portalHome = $portalConfig[[PortalConfig]::PortalHome.ToString()]
     
     [string[]] $installedFixes = @()
     $wpver_bat = Join-Path $portalHome "bin\WPVersionInfo.bat"
@@ -326,14 +326,13 @@ Function Install-IBMWebSpherePortal() {
         $wasWinSvcName = New-IBMWebSphereAppServerWindowsService -ProfilePath $wpProfileHome -ServerName $ServerName `
                             -WASEdition ND -WebSphereAdministratorCredential $WebSphereAdministratorCredential
         if ($wasWinSvcName -and (Get-Service -DisplayName $wasWinSvcName)) {
-            $portalConfig = Get-IBMPortalConfig
-            $cfgEnginePath = $portalConfig[[PortalConfig]::ProfileConfigEnginePath]
-            
             # Restart Portal
-            Invoke-ConfigEngine -Path $cfgEnginePath -Tasks @("stop-portal-server","start-portal-server") -WebSphereAdministratorCredential $WebSphereAdministratorCredential
+            Stop-WebSpherePortal -WebSphereAdministratorCredential $WebSphereAdministratorCredential
+            Start-WebSpherePortal
             
+            $portalConfig = Get-IBMPortalConfig
             # Stop default Config Wizard server if started
-            $cwProfileDir = $portalConfig[[PortalConfig]::ConfigWizardProfilePath]
+            $cwProfileDir = $portalConfig[[PortalConfig]::ConfigWizardProfilePath.ToString()]
             if (Test-Path($cwProfileDir)) {
                 Stop-WebSphereServerViaBatch "server1" $cwProfileDir $WebSphereAdministratorCredential
             }
@@ -444,6 +443,110 @@ Function Invoke-ConfigEngine() {
 }
 
 ##############################################################################################################
+# Test-WebSpherePortalStarted
+#   Checks to see if Portal is already started
+##############################################################################################################
+Function Test-WebSpherePortalStarted {
+    [CmdletBinding(SupportsShouldProcess=$False)]
+    param (
+        [parameter(Mandatory=$true,position=0)]
+        [String] $ServerName,
+        
+        [parameter(Mandatory=$true,position=1)]
+        [String] $PortalPIDFile
+    )
+    
+    if (Test-WebSphereServerService -ServerName $ServerName) {
+        Return $true
+    } else {
+        if (Test-Path $PortalPIDFile) {
+            Return $true
+        } else {
+            Return $false
+        }
+    }
+}
+
+##############################################################################################################
+# Start-WebSpherePortal
+#   Starts WebSphere Portal using Windows Service or via batch if service not available
+##############################################################################################################
+Function Start-WebSpherePortal {
+    [CmdletBinding(SupportsShouldProcess=$False)]
+    param (
+        [parameter(Mandatory=$false,position=0)]
+        [string] $ServerName
+    )
+    
+    $portalConfig = Get-IBMPortalConfig
+    
+    if (!($ServerName)) {
+        $cfgEnginePath = $portalConfig[[PortalConfig]::ProfileConfigEnginePath.ToString()]
+        Invoke-ConfigEngine -Path $cfgEnginePath -Tasks "start-portal-server"
+    } else {
+        $wpProfilePath = $portalConfig[[PortalConfig]::ProfilePath.ToString()]
+        $wpLogRoot = Join-Path $wpProfilePath "logs\$ServerName"
+        $portalPidFile = Join-Path $wpLogRoot "$ServerName.pid"
+        
+        if (!(Test-WebSpherePortalStarted $ServerName $portalPidFile)) {
+            if (Test-WebSphereServerServiceExists -ServerName $ServerName) {
+                Start-WebSphereServer -ServerName $ServerName
+            } else {
+                Start-WebSphereServerViaBatch $ServerName $wpProfilePath
+            }
+            $sleepTimer = 0;
+        
+            Write-Verbose "Waiting for Portal PID file to be created: $portalPidFile"
+        
+            while(!(Test-Path $portalPidFile)) {
+                sleep -s 10
+                $sleepTimer += 10
+                # Wait maximum of 10 minutes for portal to start after service is initialized
+                if ($sleepTimer -ge 600) {
+                    break
+                }
+            }
+        }
+    }
+}
+
+##############################################################################################################
+# Test-WebSpherePortalStarted
+#   Checks to see if Portal is already started
+##############################################################################################################
+Function Stop-WebSpherePortal {
+    [CmdletBinding(SupportsShouldProcess=$False)]
+    param (
+        [parameter(Mandatory=$false,position=0)]
+        [String] $ServerName,
+        
+        [parameter(Mandatory=$true,position=1)]
+        [PSCredential] $WebSphereAdministratorCredential
+    )
+    
+    $portalConfig = Get-IBMPortalConfig
+    
+    if (!($ServerName)) {
+        $cfgEnginePath = $portalConfig[[PortalConfig]::ProfileConfigEnginePath.ToString()]
+        Invoke-ConfigEngine -Path $cfgEnginePath -Tasks "stop-portal-server" -WebSphereAdministratorCredential $WebSphereAdministratorCredential
+    } else {
+        $wpProfilePath = $portalConfig[[PortalConfig]::ProfilePath.ToString()]
+        $wpLogRoot = Join-Path $wpProfilePath "logs\$ServerName"
+        $portalPidFile = Join-Path $wpLogRoot "$ServerName.pid"
+        if (!(Test-WebSpherePortalStarted $ServerName $portalPidFile)) {
+            if (Test-WebSphereServerServiceExists -ServerName $ServerName) {
+                Stop-WebSphereServer -ServerName $ServerName
+            } else {
+                Stop-WebSphereServerViaBatch $ServerName $wpProfilePath $WebSphereAdministratorCredential
+            }
+        }
+        if (Test-Path $portalPidFile) {
+            Write-Error "Unable to stop WebSphere Portal server, please check the stopServer.log for more information"
+        }
+    }
+}
+
+##############################################################################################################
 # Install-IBMWebSpherePortalCumulativeFix
 #   Installs IBM WebSphere Portal Cumulative Fix on the current machine
 ##############################################################################################################
@@ -468,12 +571,12 @@ Function Install-IBMWebSpherePortalCumulativeFix() {
     
     $portalConfig = Get-IBMPortalConfig
     
-    $wpVersion = $portalConfig[[PortalConfig]::Version]
+    $wpVersion = $portalConfig[[PortalConfig]::Version.ToString()]
     Write-Verbose "Installing CF: $CFLevel to Portal: $wpVersion"
     $updated = $False
     
-    $cfgEnginePath = $portalConfig[[PortalConfig]::ProfileConfigEnginePath]
-    $wpHome = $portalConfig[[PortalConfig]::ProfileConfigEnginePath]
+    $cfgEnginePath = $portalConfig[[PortalConfig]::ProfileConfigEnginePath.ToString()]
+    $wpHome = $portalConfig[[PortalConfig]::ProfileConfigEnginePath.ToString()]
     
     # Temporarily update wkplc.properties with passwords
     $wpConfigPropertiesFile = Join-Path -Path $cfgEnginePath -ChildPath "properties\wkplc.properties"
@@ -510,6 +613,9 @@ Function Install-IBMWebSpherePortalCumulativeFix() {
             [bool] $updated = $false
             
             if (Test-Path $wpHome -PathType Container) {
+                # Stop Portal
+                Stop-WebSpherePortal -WebSphereAdministratorCredential $WebSphereAdministratorCredential
+                
                 Write-Verbose "Install CF binaries via IIM"
                 $updated = Install-IBMProductViaCmdLine -ProductId $productId -InstallationDirectory $wpHome `
                             -SourcePath $SourcePath -SourcePathCredential $SourcePathCredential -ErrorAction Stop
@@ -530,7 +636,7 @@ Function Install-IBMWebSpherePortalCumulativeFix() {
                             }
                         } else {
                             Write-Verbose "Running applyCF.bat additional configuration step (Mandatory starting on WP 8.5 CF08)"
-                            $wpBinDir = Join-Path ($portalConfig[[PortalConfig]::PortalHome]) -ChildPath "bin"
+                            $wpBinDir = Join-Path ($portalConfig[[PortalConfig]::PortalHome.ToString()]) -ChildPath "bin"
                             $applyCFbatch = Join-Path -Path $wpBinDir -ChildPath "applyCF.bat"
                             $wpPwd = $null
                             $wasPwd = $WebSphereAdministratorCredential.GetNetworkCredential().Password
