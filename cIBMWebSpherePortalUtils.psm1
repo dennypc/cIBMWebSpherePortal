@@ -326,6 +326,18 @@ Function Install-IBMWebSpherePortal() {
         $wasWinSvcName = New-IBMWebSphereAppServerWindowsService -ProfilePath $wpProfileHome -ServerName $ServerName `
                             -WASEdition ND -WebSphereAdministratorCredential $WebSphereAdministratorCredential
         if ($wasWinSvcName -and (Get-Service -DisplayName $wasWinSvcName)) {
+            $portalConfig = Get-IBMPortalConfig
+            $cfgEnginePath = $portalConfig[[PortalConfig]::ProfileConfigEnginePath]
+            
+            # Restart Portal
+            Invoke-ConfigEngine -Path $cfgEnginePath -Tasks @("stop-portal-server","start-portal-server") -WebSphereAdministratorCredential $WebSphereAdministratorCredential
+            
+            # Stop default Config Wizard server if started
+            $cwProfileDir = $portalConfig[[PortalConfig]::ConfigWizardProfilePath]
+            if (Test-Path($cwProfileDir)) {
+                Stop-WebSphereServerViaBatch "server1" $cwProfileDir $WebSphereAdministratorCredential
+            }
+            
             Write-Verbose "IBM WebSphere Windows Service configured successfully"
             $installed = $true
         } else {
