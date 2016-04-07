@@ -341,17 +341,20 @@ Function Install-IBMWebSpherePortal() {
     if ($installed -and (Test-Path($wpProfileHome)) -and $WASInsDir -and (Test-Path($WASInsDir))) {
         $installed = $false
         # Create a windows service for the WAS server
+        Write-Verbose "Creating windows service for portal"
         $wasWinSvcName = New-IBMWebSphereAppServerWindowsService -ProfilePath $wpProfileHome -ServerName $ServerName `
                             -WASEdition ND -WebSphereAdministratorCredential $WebSphereAdministratorCredential
         if ($wasWinSvcName -and (Get-Service -DisplayName $wasWinSvcName)) {
             # Restart Portal
+            Write-Verbose "Restarting portal via batch for first time - Windows Service will be used going forward"
             Stop-WebSpherePortal -WebSphereAdministratorCredential $WebSphereAdministratorCredential
-            Start-WebSpherePortal
+            Start-WebSpherePortal -WebSphereAdministratorCredential $WebSphereAdministratorCredential
             
             $portalConfig = Get-IBMPortalConfig
             # Stop default Config Wizard server if started
             $cwProfileDir = $portalConfig[[PortalConfig]::ConfigWizardProfilePath.ToString()]
             if (Test-Path($cwProfileDir)) {
+                Write-Verbose "Stopping Config Wizard server as is not needed"
                 Stop-WebSphereServerViaBatch "server1" $cwProfileDir $WebSphereAdministratorCredential
             }
             
@@ -414,6 +417,9 @@ Function Invoke-ConfigEngine() {
         if ($PortalAdministratorCredential) {
             $wpPwd = $PortalAdministratorCredential.GetNetworkCredential().Password
             $Tasks += "-DPortalAdminPwd=$wpPwd"
+        } else {
+            $wasPwd = $WebSphereAdministratorCredential.GetNetworkCredential().Password
+            $Tasks += "-DPortalAdminPwd=$wasPwd"
         }
         
         $discStdOut = $DiscardStandardOut.IsPresent
@@ -493,15 +499,18 @@ Function Start-WebSpherePortal {
     [CmdletBinding(SupportsShouldProcess=$False)]
     param (
         [parameter(Mandatory=$false,position=0)]
-        [string] $ServerName
+        [string] $ServerName,
+        
+        [parameter(Mandatory=$false,position=1)]
+        [PSCredential] $WebSphereAdministratorCredential
     )
     
     $portalConfig = Get-IBMPortalConfig
     
-    if (!($ServerName)) {
+    if (!($ServerName) -and $WebSphereAdministratorCredential) {
         $cfgEnginePath = $portalConfig[[PortalConfig]::ProfileConfigEnginePath.ToString()]
-        Invoke-ConfigEngine -Path $cfgEnginePath -Tasks "start-portal-server"
-    } else {
+        Invoke-ConfigEngine -Path $cfgEnginePath -Tasks "start-portal-server" -WebSphereAdministratorCredential $WebSphereAdministratorCredential
+    } elseif ($ServerName) {
         $wpProfilePath = $portalConfig[[PortalConfig]::ProfilePath.ToString()]
         $wpLogRoot = Join-Path $wpProfilePath "logs\$ServerName"
         $portalPidFile = Join-Path $wpLogRoot "$ServerName.pid"
@@ -525,6 +534,8 @@ Function Start-WebSpherePortal {
                 }
             }
         }
+    } else {
+        Write-Error "You must specify either ServerName or WAS credentials (for ConfigEngine) to start the server"
     }
 }
 
@@ -724,7 +735,7 @@ Function Initialize-PortalDatabaseTransfer() {
         [String] $DatabaseInstanceHomeDirectory,
 
         [parameter(Mandatory = $true)]
-        [Microsoft.Management.Infrastructure.CimInstance[]] $PortalDatabaseConfig,
+        [Microsoft.Management.Infrastructure.CimInstance[]] $DatabaseConfig,
 
         [parameter(Mandatory = $true)]
         [String] $JDBCDriverPath,
@@ -738,8 +749,7 @@ Function Initialize-PortalDatabaseTransfer() {
         [parameter(Mandatory=$true)]
         [PSCredential] $RelDBCredential,
         
-        [bool]
-        $SameDBCredentials = $true,
+        [bool] $SameDBCredentials = $true,
         
         [parameter(Mandatory=$false)]
         [PSCredential] $CommDBCredential,
@@ -769,14 +779,18 @@ Function Initialize-PortalDatabaseTransfer() {
         Return $false
     }
 
-    if (!($PortalDatabaseConfig.CimInstanceProperties)) {
+    if (!($DatabaseConfig.CimInstanceProperties)) {
         Write-Error "Database configuration not specified"
         Return $false
     }
 
     # Backup Files
-    Copy-Item -Path $wpdbdomainPropertiesFile -Destination "$wpdbdomainPropertiesFile.bak.$(get-date -f yyyyMMddHHmmss)"
-    Copy-Item -Path $wpdbtypePropertiesFile -Destination "$wpdbtypePropertiesFile.bak.$(get-date -f yyyyMMddHHmmss)"
+    Write-Verbose "Backing up property files for database transfer"
+    $cfgEngineProc = Invoke-ConfigEngine -Path $cfgEnginePath -Tasks "backup-property-files-for-dbxfer" -WebSphereAdministratorCredential $WebSphereAdministratorCredential
+    if (!($cfgEngineProc -and ($cfgEngineProc.ExitCode -eq 0))) {
+        Write-Error "Unable to backup files"
+        Return $false
+    }
 
     [hashtable] $dbdomainprops = @{}
     [hashtable] $dbtypeprops = @{}
@@ -787,8 +801,8 @@ Function Initialize-PortalDatabaseTransfer() {
     }
     $tempDbDomain = @{}
     $tempkeySet = @()
-    for ($i=0; $i -lt $PortalDatabaseConfig.Count; $i++) {
-        [Microsoft.Management.Infrastructure.CimInstance] $item = $PortalDatabaseConfig.Get($i)
+    for ($i=0; $i -lt $DatabaseConfig.Count; $i++) {
+        [Microsoft.Management.Infrastructure.CimInstance] $item = $DatabaseConfig.Get($i)
         if ($tempkeySet.Contains($item.Key)) {
             $PortalDBConfig.DbDomains += $tempDbDomain
             $tempkeySet.Clear()
@@ -797,7 +811,7 @@ Function Initialize-PortalDatabaseTransfer() {
         }
         $tempkeySet += $item.Key
         $tempDbDomain += @{$item.Key = $item.Value}
-        if ($i -eq ($PortalDatabaseConfig.Count - 1)) {
+        if ($i -eq ($DatabaseConfig.Count - 1)) {
             $PortalDBConfig.DbDomains += $tempDbDomain
         }
     }
@@ -887,8 +901,7 @@ Function Invoke-DatabaseTransfer {
 		[String] $DatabaseInstanceHomeDirectory,
 
 		[parameter(Mandatory = $true)]
-		[Microsoft.Management.Infrastructure.CimInstance[]]
-		$DatabaseConfig,
+		[Microsoft.Management.Infrastructure.CimInstance[]] $DatabaseConfig,
 
 		[String] $DatabaseInstanceName,
 
@@ -906,8 +919,7 @@ Function Invoke-DatabaseTransfer {
         [parameter(Mandatory=$true)]
         [PSCredential] $RelDBCredential,
         
-        [bool]
-        $SameDBCredentials = $true,
+        [bool] $SameDBCredentials = $true,
         
         [parameter(Mandatory=$false)]
         [PSCredential] $CommDBCredential,
@@ -930,56 +942,59 @@ Function Invoke-DatabaseTransfer {
     $profilePath = $portalConfig[[PortalConfig]::ProfilePath.ToString()]
     
     # Initialize the database transfer
-    $initialized = Initialize-PortalDatabaseTransfer -PortalDatabaseType $PortalDatabaseType `
-                    -DatabaseHostName $DatabaseHostName -DatabaseInstanceName $DatabaseInstanceName -DatabasePort $DatabasePort `
-                    -DatabaseInstanceHomeDirectory $DatabaseInstanceHomeDirectory -PortalDatabaseConfig $DatabaseConfig `
-                    -JDBCDriverPath $JDBCDriverPath -WebSphereAdministratorCredential $WebSphereAdministratorCredential `
-                    -DBACredential $DBACredential -RelDBCredential $RelDBCredential -SameDBCredentials $SameDBCredentials `
-                    -CommDBCredential $CommDBCredential -CustDBCredential $CustDBCredential -JcrDBCredential $JcrDBCredential `
-                    -LmDBCredential $LmDBCredential -FdbkDBCredential $FdbkDBCredential
+    $initialized = Initialize-PortalDatabaseTransfer @psboundparameters -ErrorAction Stop
 
     if ($initialized) {
-        # Backup icm.properties in case the database transfer fails
-        #$icm_file_path = Join-Path -Path $ProfilePath -ChildPath $ICM_PROP_FILE_SUFFIX
-        #Copy-Item -Path $icm_file_path -Destination "$icm_file_path.bak.$(get-date -f yyyyMMddHHmmss)"
-
         Stop-WebSpherePortal -WebSphereAdministratorCredential $WebSphereAdministratorCredential
 
         # Create Database
         Write-Verbose "Creating Databases"
-        $cfgEngineProc = Invoke-ConfigEngine -Path $cfgEnginePath -Tasks "create-database"
+        $cfgEngineProc = Invoke-ConfigEngine -Path $cfgEnginePath -Tasks "create-database" -WebSphereAdministratorCredential $WebSphereAdministratorCredential
         $buildSuccessfull = ($cfgEngineProc -and ($cfgEngineProc.ExitCode -eq 0))
         if ($buildSuccessfull) {
             # Setup Database
             Write-Verbose "Setting up Databases/Users/Schema"
-            $cfgEngineProc = Invoke-ConfigEngine -Path $cfgEnginePath -Tasks "setup-database"
+            $cfgEngineProc = Invoke-ConfigEngine -Path $cfgEnginePath -Tasks "setup-database" -WebSphereAdministratorCredential $WebSphereAdministratorCredential
             $buildSuccessfull = ($cfgEngineProc -and ($cfgEngineProc.ExitCode -eq 0))
             if ($buildSuccessfull) {
                 # Validate Database
                 Write-Verbose "Validate Databases"
-                $cfgEngineProc = Invoke-ConfigEngine -Path $cfgEnginePath -Tasks "validate-database"
+                $cfgEngineProc = Invoke-ConfigEngine -Path $cfgEnginePath -Tasks @("validate-database","validate-database-environment") -WebSphereAdministratorCredential $WebSphereAdministratorCredential
                 $buildSuccessfull = ($cfgEngineProc -and ($cfgEngineProc.ExitCode -eq 0))
                 if ($buildSuccessfull) {
+                    Stop-WebSpherePortal -WebSphereAdministratorCredential $WebSphereAdministratorCredential
                     # Transfer Database
                     Write-Verbose "Tranferring Databases"
                     sleep -s 10
-                    $cfgEngineProc = Invoke-ConfigEngine -Path $cfgEnginePath -Tasks "database-transfer" -Verbose
+                    $cfgEngineProc = Invoke-ConfigEngine -Path $cfgEnginePath -Tasks @("database-transfer","enable-profiles-check-managed","package-profiles") -WebSphereAdministratorCredential $WebSphereAdministratorCredential -Verbose
                     $buildSuccessfull = ($cfgEngineProc -and ($cfgEngineProc.ExitCode -eq 0))
                     if ($buildSuccessfull) {
-                        Write-Verbose "IBM WebSphere Portal Database Transfer SUCCESSFUL. Restarting."
-                        Stop-WebSpherePortal -WebSphereAdministratorCredential $WebSphereAdministratorCredential
-                        Start-WebSpherePortal
+                        # Grant Privileges
+                        Write-Verbose "Granting Runtime DB User Privileges"
+                        $cfgEngineProc = Invoke-ConfigEngine -Path $cfgEnginePath -Tasks "grant-runtime-db-user-privileges" -WebSphereAdministratorCredential $WebSphereAdministratorCredential
+                        $buildSuccessfull = ($cfgEngineProc -and ($cfgEngineProc.ExitCode -eq 0))
+                        if ($buildSuccessfull) {
+                            Write-Verbose "IBM WebSphere Portal Database Transfer SUCCESSFUL. Restarting."
+                            Stop-WebSpherePortal -WebSphereAdministratorCredential $WebSphereAdministratorCredential
+                            Start-WebSpherePortal -WebSphereAdministratorCredential $WebSphereAdministratorCredential
+                        } else {
+                            Write-Verbose ($cfgEngineProc.StdOut)
+                            Write-Error "IBM WebSphere Portal Database Transfer FAILED:: An error occurred while granting user privileges"
+                        }
                     } else {
                         Write-Verbose "IBM WebSphere Portal Database Transfer FAILED:: An error occurred while transferring the database"
                         Write-Error "IBM WebSphere Portal Database Transfer FAILED:: An error occurred while transferring the database"
                     }
                 } else {
+                    Write-Verbose ($cfgEngineProc.StdOut)
                     Write-Error "IBM WebSphere Portal Database Transfer FAILED:: An error occurred while validating the databases"
                 }
             } else {
+                Write-Verbose ($cfgEngineProc.StdOut)
                 Write-Error "IBM WebSphere Portal Database Transfer FAILED:: An error occurred while setting up the databases"
             }
         } else {
+            Write-Verbose ($cfgEngineProc.StdOut)
             Write-Error "IBM WebSphere Portal Database Transfer FAILED:: An error occurred while creating the databases"
         }
     } else {
