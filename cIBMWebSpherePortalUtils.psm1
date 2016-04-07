@@ -605,7 +605,7 @@ Function Install-IBMWebSpherePortalCumulativeFix() {
     $updated = $False
     
     $cfgEnginePath = $portalConfig[[PortalConfig]::ProfileConfigEnginePath.ToString()]
-    $wpHome = $portalConfig[[PortalConfig]::ProfileConfigEnginePath.ToString()]
+    $wpHome = $portalConfig[[PortalConfig]::PortalHome.ToString()]
     
     # Temporarily update wkplc.properties with passwords
     $wpConfigPropertiesFile = Join-Path -Path $cfgEnginePath -ChildPath "properties\wkplc.properties"
@@ -665,7 +665,7 @@ Function Install-IBMWebSpherePortalCumulativeFix() {
                             }
                         } else {
                             Write-Verbose "Running applyCF.bat additional configuration step (Mandatory starting on WP 8.5 CF08)"
-                            $wpBinDir = Join-Path ($portalConfig[[PortalConfig]::PortalHome.ToString()]) -ChildPath "bin"
+                            $wpBinDir = Join-Path ($portalConfig[[PortalConfig]::ProfilePath.ToString()]) -ChildPath "PortalServer\bin"
                             $applyCFbatch = Join-Path -Path $wpBinDir -ChildPath "applyCF.bat"
                             $wpPwd = $null
                             $wasPwd = $WebSphereAdministratorCredential.GetNetworkCredential().Password
