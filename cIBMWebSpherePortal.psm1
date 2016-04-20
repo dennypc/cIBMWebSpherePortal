@@ -21,6 +21,24 @@ enum PortalEdition {
     EXTEND
 }
 
+enum PortalConfig {
+    Edition
+    PortalHome
+    ProfileName
+    ProfilePath
+    ProfileConfigEnginePath
+    Version
+    CFLevel
+    ConfigWizardProfilePath
+}
+
+enum DatabaseType {
+    SQLSERVER
+    DB2
+    ORACLE
+    DERBY
+}
+
 <#
    DSC resource to manage the installation of IBM WebSphere Portal.
    Key features: 
@@ -441,6 +459,297 @@ class cIBMWebSpherePortalCumulativeFix {
             $returnValue.Add('PortalEdition', $RetWPEdition)
         }
 
+        return $returnValue
+    }
+}
+
+[DscResource()]
+class cIBMWebSpherePortalDatabaseTransfer {
+    
+    [DscProperty(Mandatory)]
+    [Ensure] $Ensure
+    
+    [DscProperty()]
+    [DatabaseType] $PortalDatabaseType
+    
+    [DscProperty(Key)]
+    [String] $DatabaseHostName
+
+    [DscProperty()]
+    [String] $DatabaseInstanceHomeDirectory
+
+    [DscProperty()]
+    [String] $DatabaseInstanceName
+
+    [DscProperty()]
+    [Int] $DatabasePort = 1433
+    
+    [DscProperty()]
+    [String] $JDBCDriverPath
+
+    [DscProperty()]
+    [hashtable] $RelDBConfig = @{
+                    DomainName = "release"
+                    DatabaseName = "reldb"
+                    Schema = "relusr"
+                    DataSourceName = "relDS"
+                }
+    
+    [DscProperty()]
+    [hashtable] $CommDBConfig = @{
+                    DomainName = "community"
+                    DatabaseName = "commdb"
+                    Schema = "commusr"
+                    DataSourceName = "commDS"
+                }
+    
+    [DscProperty()]
+    [hashtable] $CustDBConfig = @{
+                    DomainName = "customization"
+                    DatabaseName = "custdb"
+                    Schema = "custusr"
+                    DataSourceName = "custDS"
+                }
+    
+    [DscProperty()]
+    [hashtable] $JcrDBConfig = @{
+                    DomainName = "jcr"
+                    DatabaseName = "jcrdb"
+                    Schema = "jcrusr"
+                    DataSourceName = "jcrdbDS"
+                }
+    
+    [DscProperty()]
+    [hashtable] $LmDBConfig = @{
+                    DomainName = "likeminds"
+                    DatabaseName = "lmdb"
+                    Schema = "lmusr"
+                    DataSourceName = "lmDS"
+                }
+    
+    [DscProperty()]
+    [hashtable] $FdbkDBConfig = @{
+                    DomainName = "feedback"
+                    DatabaseName = "fdbkdb"
+                    Schema = "fdbkusr"
+                    DataSourceName = "fdbkDS"
+                }
+    
+    [DscProperty()]
+    [PSCredential] $DBACredential
+
+    [DscProperty(Mandatory)]
+    [PSCredential] $WebSphereAdministratorCredential
+
+    [DscProperty()]
+    [PSCredential] $DBUserCredential
+    
+    [DscProperty()]
+    [bool] $SameDBCredentials = $true
+
+    [DscProperty()]
+    [PSCredential] $RelDBCredential
+    
+    [DscProperty()]
+    [PSCredential] $CommDBCredential
+    
+    [DscProperty()]
+    [PSCredential] $CustDBCredential
+    
+    [DscProperty()]
+    [PSCredential] $JcrDBCredential
+    
+    [DscProperty()]
+    [PSCredential] $LmDBCredential
+    
+    [DscProperty()]
+    [PSCredential] $FdbkDBCredential
+    
+    # Sets the desired state of the resource.
+    [void] Set() {
+        try {
+            if ($this.Ensure -eq [Ensure]::Present) {
+                [string] $dbTypeStr = $this.PortalDatabaseType.ToString()
+                Write-Verbose "Starting Portal Database Transfer to $dbTypeStr ($this.DatabaseHostName)"
+                [hashtable] $PortalDBConfig = @{
+                    DbDomains = @()
+                }
+                $PortalDBConfig.DbDomains += $this.RelDBConfig
+                $PortalDBConfig.DbDomains += $this.CommDBConfig
+                $PortalDBConfig.DbDomains += $this.CustDBConfig
+                $PortalDBConfig.DbDomains += $this.JcrDBConfig
+                $PortalDBConfig.DbDomains += $this.LmDBConfig
+                $PortalDBConfig.DbDomains += $this.FdbkDBConfig
+                if ($this.SameDBCredentials) {
+                    $this.RelDBCredential = $this.DBUserCredential
+                }
+                Invoke-DatabaseTransfer -PortalDatabaseType $this.PortalDatabaseType `
+                    -DatabaseHostName $this.DatabaseHostName -DatabaseInstanceName $this.DatabaseInstanceName `
+                    -DatabasePort $this.DatabasePort -DatabaseInstanceHomeDirectory $this.DatabaseInstanceHomeDirectory `
+                    -PortalDBConfig $PortalDBConfig -JDBCDriverPath $this.JDBCDriverPath `
+                    -WebSphereAdministratorCredential $this.WebSphereAdministratorCredential `
+                    -DBACredential $this.DBACredential -RelDBCredential $this.RelDBCredential `
+                    -SameDBCredentials $this.SameDBCredentials -CommDBCredential $this.CommDBCredential `
+                    -CustDBCredential $this.CustDBCredential -JcrDBCredential $this.JcrDBCredential `
+                    -LmDBCredential $this.LmDBCredential -FdbkDBCredential $this.FdbkDBCredential -ErrorAction Stop
+            } else {
+                Write-Verbose "Operation not allowed.  You can't rollback a database transfer"
+            }
+        } catch {
+            Write-Error -ErrorRecord $_ -ErrorAction Stop
+        }
+    }
+    
+    # Tests if the resource is in the desired state.
+    [bool] Test() {
+        Write-Verbose "Checking the IBM WebSphere Portal Database Configuration"
+        $wpDBConfiguredCorrectly = $false
+        $wpDBRsrc = $this.Get()
+        
+        if (($wpDBRsrc.Ensure -eq $this.Ensure) -and ($wpDBRsrc.Ensure -eq [Ensure]::Present)) {
+            if ($wpDBRsrc.PortalDatabaseType -eq $this.PortalDatabaseType) {
+                if ($wpDBRsrc.DatabaseHostName -eq $this.DatabaseHostName) {
+                    if ($wpDBRsrc.DatabasePort -eq $this.DatabasePort) {
+                        Write-Verbose "IBM WebSphere Portal Database configured correctly"
+                        $wpDBConfiguredCorrectly = $true
+                        #TODO: Perform more testing
+                    }
+                }
+            }
+        } elseif (($wpDBRsrc.Ensure -eq $this.Ensure) -and ($wpDBRsrc.Ensure -eq [Ensure]::Absent)) {
+            $wpDBConfiguredCorrectly = $true
+        }
+
+        if (!($wpDBConfiguredCorrectly)) {
+            Write-Verbose "IBM WebSphere Portal Database not configured correctly"
+        }
+        
+        return $wpDBConfiguredCorrectly
+    }
+    
+    # Gets the portal's current database configuration
+    [cIBMWebSpherePortalDatabaseTransfer] Get() {
+        $RetEnsure = [Ensure]::Absent
+        $RetDBHostname = $null
+        $RetDatabasePort = $null
+        $RetPortalDatabaseType = $null
+        
+        $portalcfg = Get-IBMPortalConfig
+        [hashtable] $wasTopology = Get-IBMWebSphereTopology -ProfilePath $portalcfg["ProfilePath"]
+
+        $cellName = $wasTopology.Keys[0]
+        $nodeName = ($wasTopology[$cellName]).GetValue(0).Keys[0]
+        $serverName = (($wasTopology[$cellName]).GetValue(0)[$nodeName]).GetValue(0)
+        $resourcesXMLPath = Join-Path $portalcfg["ProfilePath"] "config/cells/$cellName/nodes/$nodeName/servers/$serverName/resources.xml"
+
+        $sqlProviderType = "Microsoft SQL Server JDBC Driver (XA)"
+
+        $RetRelDBConfig = @{ DomainName = "release" }
+        $RetCommDBConfig = @{ DomainName = "community" }
+        $RetCustDBConfig = @{ DomainName = "customization" }
+        $RetJcrDBConfig = @{ DomainName = "jcr" }
+        $RetLmDBConfig = @{ DomainName = "likeminds" }
+        $RetFdbkDBConfig = @{ DomainName = "feedback" }
+
+        $dbType = $null
+
+        if (Test-Path $resourcesXMLPath) {
+            Write-Host "File found" -ForegroundColor DarkYellow
+            [XML] $resourcesXML = Get-Content $resourcesXMLPath
+            $rootNode = $resourcesXML.ChildNodes[1]
+            $ns = New-Object System.Xml.XmlNamespaceManager($resourcesXML.NameTable)
+            $ns.AddNamespace("resources.env","http://www.ibm.com/websphere/appserver/schemas/5.0/resources.env.xmi")
+            $dataStorePropSet = $resourcesXML.SelectSingleNode("//resources.env:ResourceEnvironmentProvider[@name='WP DataStoreService']/propertySet", $ns)
+            $dataStorePropSet.ChildNodes | % {
+                $varName = $_.Attributes.GetNamedItem("name")
+                $varValue = $_.Attributes.GetNamedItem("value")
+                if ($varName.Value -eq "rel.datasource.schema") {
+                    $RetRelDBConfig["Schema"] = $varValue.Value 
+                } elseif ($varName.Value -eq "cust.datasource.schema") {
+                    $RetCustDBConfig["Schema"] = $varValue.Value 
+                } elseif ($varName.Value -eq "comm.datasource.schema") {
+                    $RetCommDBConfig["Schema"] = $varValue.Value 
+                } elseif ($varName.Value -eq "jcr.datasource.schema") {
+                    $RetJcrDBConfig["Schema"] = $varValue.Value 
+                } elseif ($varName.Value -eq "rel.datasource.dbms") {
+                    $dbType = $varValue.Value
+                }
+            }
+            $lmProps = Get-JavaProperties -PropertyFilePath (Join-Path $portalcfg["ProfilePath"] "PortalServer/config/config/services/LikeMindsService.properties") -PropertyList @("likeminds.schema")
+            if ($lmProps -and $lmProps["likeminds.schema"]) {
+                $RetLmDBConfig["Schema"] = $lmProps["likeminds.schema"]
+            }
+            $fdbkProps = Get-JavaProperties -PropertyFilePath (Join-Path $portalcfg["ProfilePath"] "PortalServer/config/config/services/FeedbackService.properties") -PropertyList @("schemaName")
+            if ($fdbkProps -and $fdbkProps["schemaName"]) {
+                $RetFdbkDBConfig["Schema"] = $fdbkProps["schemaName"]
+            }
+            $ns = New-Object System.Xml.XmlNamespaceManager($resourcesXML.NameTable)
+            $ns.AddNamespace("resources.jdbc","http://www.ibm.com/websphere/appserver/schemas/5.0/resources.jdbc.xmi")
+            $jdbcFactories = $resourcesXML.SelectNodes("//resources.jdbc:JDBCProvider[@name='wpdbJDBC_$dbType']/factories", $ns)
+            $jdbcFactories | % {
+                $varName = $_.Attributes.GetNamedItem("name")
+                $varDesc = $_.Attributes.GetNamedItem("description")
+                $ampIdx = $varDesc.Value.IndexOf("&&&")+3
+                $domainName = $varDesc.Value.Substring($ampIdx,$varDesc.Value.IndexOf(",&&&")-$ampIdx)
+                if ($domainName -eq "release") {
+                    $RetRelDBConfig["DataSourceName"] = $varName.Value
+                } elseif ($domainName -eq "customization") {
+                    $RetCustDBConfig["DataSourceName"] = $varName.Value
+                } elseif ($domainName -eq "community") {
+                    $RetCommDBConfig["DataSourceName"] = $varName.Value
+                } elseif ($domainName -eq "jcr") {
+                    $RetJcrDBConfig["DataSourceName"] = $varName.Value
+                } elseif ($domainName -eq "likeminds") {
+                    $RetLmDBConfig["DataSourceName"] = $varName.Value
+                } elseif ($domainName -eq "feedback") {
+                    $RetFdbkDBConfig["DataSourceName"] = $varName.Value
+                }
+                $_.FirstChild.ChildNodes | % {
+                    $subName = $_.Attributes.GetNamedItem("name")
+                    $subValue = $_.Attributes.GetNamedItem("value")
+                    if ($subName.Value -eq "databaseName") {
+                        if ($domainName -eq "release") {
+                            $RetRelDBConfig["DatabaseName"] = $subValue.Value
+                        } elseif ($domainName -eq "customization") {
+                            $RetCustDBConfig["DatabaseName"] = $subValue.Value
+                        } elseif ($domainName -eq "community") {
+                            $RetCommDBConfig["DatabaseName"] = $subValue.Value
+                        } elseif ($domainName -eq "jcr") {
+                            $RetJcrDBConfig["DatabaseName"] = $subValue.Value
+                        } elseif ($domainName -eq "likeminds") {
+                            $RetLmDBConfig["DatabaseName"] = $subValue.Value
+                        } elseif ($domainName -eq "feedback") {
+                            $RetFdbkDBConfig["DatabaseName"] = $subValue.Value
+                        }
+                    } elseif (($subName.Value -eq "serverName") -and ($domainName -eq "release")) {
+                        $RetDBHostname = $subValue.Value
+                    } elseif (($subName.Value -eq "portNumber") -and ($domainName -eq "release")) {
+                        $RetDatabasePort = $subValue.Value
+                    }
+                }
+            }
+            
+            if ($dbType -eq "sqlserver2005") {
+                $RetPortalDatabaseType = [DatabaseType]::SQLSERVER
+                $RetEnsure = [Ensure]::Present
+            } else {
+                $RetPortalDatabaseType = [DatabaseType]::DERBY
+            }
+        }
+        
+        $returnValue = @{
+            Ensure = $RetEnsure
+            DatabaseHostName = $RetDBHostname
+            PortalDatabaseType = $RetPortalDatabaseType
+            DatabasePort = $RetDatabasePort
+            RelDBConfig = $RetRelDBConfig
+            CustDBConfig = $RetCustDBConfig
+            CommDBConfig = $RetCommDBConfig
+            JcrDBConfig = $RetJcrDBConfig
+            LmDBConfig = $RetLmDBConfig
+            FdbkDBConfig = $RetFdbkDBConfig
+        }
+        
         return $returnValue
     }
 }

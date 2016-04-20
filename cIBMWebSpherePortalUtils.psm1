@@ -348,7 +348,8 @@ Function Install-IBMWebSpherePortal() {
             # Restart Portal
             Write-Verbose "Restarting portal via batch for first time - Windows Service will be used going forward"
             Stop-WebSpherePortal -WebSphereAdministratorCredential $WebSphereAdministratorCredential
-            Start-WebSpherePortal -WebSphereAdministratorCredential $WebSphereAdministratorCredential
+            # Start via Windows Service
+            Start-WebSpherePortal $ServerName $WebSphereAdministratorCredential
             
             $portalConfig = Get-IBMPortalConfig
             # Stop default Config Wizard server if started
@@ -719,8 +720,8 @@ Function Install-IBMWebSpherePortalCumulativeFix() {
 ##############################################################################################################
 Function Initialize-PortalDatabaseTransfer() {
     param (
-        [parameter(Mandatory = $true)]
-        [DatabaseType] $PortalDatabaseType = [DatabaseType]::SQL_SERVER,
+        [parameter(Mandatory = $false)]
+        [DatabaseType] $PortalDatabaseType = [DatabaseType]::SQLSERVER,
 
         [parameter(Mandatory = $true)]
         [String] $DatabaseHostName,
@@ -735,7 +736,7 @@ Function Initialize-PortalDatabaseTransfer() {
         [String] $DatabaseInstanceHomeDirectory,
 
         [parameter(Mandatory = $true)]
-        [Microsoft.Management.Infrastructure.CimInstance[]] $DatabaseConfig,
+        [hashtable] $PortalDBConfig,
 
         [parameter(Mandatory = $true)]
         [String] $JDBCDriverPath,
@@ -779,11 +780,6 @@ Function Initialize-PortalDatabaseTransfer() {
         Return $false
     }
 
-    if (!($DatabaseConfig.CimInstanceProperties)) {
-        Write-Error "Database configuration not specified"
-        Return $false
-    }
-
     # Backup Files
     Write-Verbose "Backing up property files for database transfer"
     $cfgEngineProc = Invoke-ConfigEngine -Path $cfgEnginePath -Tasks "backup-property-files-for-dbxfer" -WebSphereAdministratorCredential $WebSphereAdministratorCredential
@@ -795,33 +791,12 @@ Function Initialize-PortalDatabaseTransfer() {
     [hashtable] $dbdomainprops = @{}
     [hashtable] $dbtypeprops = @{}
 
-    #Convert from CimInstance[] back to hashtable
-    $PortalDBConfig = @{
-        DbDomains = @()
-    }
-    $tempDbDomain = @{}
-    $tempkeySet = @()
-    for ($i=0; $i -lt $DatabaseConfig.Count; $i++) {
-        [Microsoft.Management.Infrastructure.CimInstance] $item = $DatabaseConfig.Get($i)
-        if ($tempkeySet.Contains($item.Key)) {
-            $PortalDBConfig.DbDomains += $tempDbDomain
-            $tempkeySet.Clear()
-            $tempDbDomain = $null
-            $tempDbDomain = @{}
-        }
-        $tempkeySet += $item.Key
-        $tempDbDomain += @{$item.Key = $item.Value}
-        if ($i -eq ($DatabaseConfig.Count - 1)) {
-            $PortalDBConfig.DbDomains += $tempDbDomain
-        }
-    }
-
     Foreach ($dbDomain in $PortalDBConfig.DbDomains) {
         $dbDomainName = $dbDomain.DomainName
         $dbdomainprops.Add("$dbDomainName.DbType", $DatabaseTypeMap[$PortalDatabaseType.ToString()])
         
         # Set Global DB Configuration
-        if ($PortalDatabaseType -eq [DatabaseType]::SQL_SERVER) {
+        if ($PortalDatabaseType -eq [DatabaseType]::SQLSERVER) {
             $baseSQLServerURL = "jdbc:sqlserver://$DatabaseHostName`:$DatabasePort"
             if ($DatabaseInstanceName) {
                 $baseSQLServerURL = $baseSQLServerURL + ";instanceName=$DatabaseInstanceName"
@@ -871,7 +846,7 @@ Function Initialize-PortalDatabaseTransfer() {
         $dbdomainprops.Add("feedback.DbPassword", $FdbkDBCredential.GetNetworkCredential().Password)
     }
 
-    if ($PortalDatabaseType -eq [DatabaseType]::SQL_SERVER) {
+    if ($PortalDatabaseType -eq [DatabaseType]::SQLSERVER) {
         $dbtypeprops.Add("sqlserver2005.DbLibrary", ($JDBCDriverPath -replace "\\","/"))
     } else {
         #TODO: Add support for other database types
@@ -893,7 +868,7 @@ Function Invoke-DatabaseTransfer {
 	[CmdletBinding()]
 	param (
         [parameter(Mandatory = $true)]
-        [DatabaseType] $PortalDatabaseType = [DatabaseType]::SQL_SERVER,
+        [DatabaseType] $PortalDatabaseType = [DatabaseType]::SQLSERVER,
         
         [parameter(Mandatory = $true)]
 		[String] $DatabaseHostName,
@@ -901,7 +876,7 @@ Function Invoke-DatabaseTransfer {
 		[String] $DatabaseInstanceHomeDirectory,
 
 		[parameter(Mandatory = $true)]
-		[Microsoft.Management.Infrastructure.CimInstance[]] $DatabaseConfig,
+        [hashtable] $PortalDBConfig,
 
 		[String] $DatabaseInstanceName,
 
@@ -942,7 +917,7 @@ Function Invoke-DatabaseTransfer {
     $profilePath = $portalConfig[[PortalConfig]::ProfilePath.ToString()]
     
     # Initialize the database transfer
-    $initialized = Initialize-PortalDatabaseTransfer @psboundparameters -ErrorAction Stop
+    $initialized = Initialize-PortalDatabaseTransfer @psboundparameters
 
     if ($initialized) {
         Stop-WebSpherePortal -WebSphereAdministratorCredential $WebSphereAdministratorCredential

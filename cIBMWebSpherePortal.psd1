@@ -21,7 +21,7 @@ GUID = '363845a1-960b-4444-9fec-5a2461fbed26'
 NestedModules = @('cIBMWebSpherePortalUtils')
 
 # DSC resources to export from this module
-DscResourcesToExport = @('cIBMWebSpherePortal','cIBMWebSpherePortalCumulativeFix')
+DscResourcesToExport = @('cIBMWebSpherePortal','cIBMWebSpherePortalCumulativeFix','cIBMWebSpherePortalDatabaseTransfer')
 
 # Author of this module
 Author = 'Denny Pichardo'
@@ -44,7 +44,7 @@ PowerShellVersion = '5.0'
 # Modules that must be imported into the global environment prior to importing this module
 RequiredModules = @(
     @{ ModuleName = 'cIBMInstallationManager'; ModuleVersion = '1.0.6'},
-    @{ ModuleName = 'cIBMWebSphereAppServer'; ModuleVersion = '1.0.5'}
+    @{ ModuleName = 'cIBMWebSphereAppServer'; ModuleVersion = '1.0.6'}
 )
 
 # Name of the Windows PowerShell host required by this module
@@ -69,7 +69,7 @@ RequiredModules = @(
 # FormatsToProcess = @()
 
 # Functions to export from this module
-FunctionsToExport = '*'
+FunctionsToExport = '*-*'
 
 # Cmdlets to export from this module
 CmdletsToExport = '*'
