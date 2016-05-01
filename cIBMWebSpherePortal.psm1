@@ -319,20 +319,26 @@ class cIBMWebSpherePortalCumulativeFix {
     [DscProperty()]
     [string] $ProfileName = "wp_profile"
     
+    [DscProperty()]
+    [bool] $DevMode
+    
     [DscProperty(NotConfigurable)]
     [String] $InstallationDirectory
     
     [DscProperty(Mandatory)]
-    [System.Management.Automation.PSCredential] $WebSphereAdministratorCredential
+    [PSCredential] $WebSphereAdministratorCredential
     
     [DscProperty()]
-    [System.Management.Automation.PSCredential] $PortalAdministratorCredential
+    [PSCredential] $PortalAdministratorCredential
     
     [DscProperty()]
     [String[]] $SourcePath
     
     [DscProperty()]
     [System.Management.Automation.PSCredential] $SourcePathCredential
+    
+    [DscProperty()]
+    [PSCredential] $SetupCredential
     
     # Sets the desired state of the resource.
     [void] Set() {
@@ -346,10 +352,14 @@ class cIBMWebSpherePortalCumulativeFix {
                 if ((Test-Path $portalDir) -and (Test-Path $profilePath)) {
                     Write-Verbose "Starting installation of IBM WebSphere Portal Cumulative Fix: $cfLevelStr"
                     
-                    $updated = Install-IBMWebSpherePortalCumulativeFix -CFLevel $this.CFLevel -DevMode $false `
+                    $updated = Install-IBMWebSpherePortalCumulativeFix `
+                            -CFLevel $this.CFLevel `
+                            -DevMode $this.DevMode `
                             -WebSphereAdministratorCredential $this.WebSphereAdministratorCredential `
                             -PortalAdministratorCredential $this.PortalAdministratorCredential `
-                            -SourcePath $this.SourcePath -SourcePathCredential $this.SourcePathCredential
+                            -SourcePath $this.SourcePath `
+                            -SourcePathCredential $this.SourcePathCredential `
+                            -SetupCredential $this.SetupCredential
                     if ($updated) {
                         Write-Verbose "IBM WebSphere Portal Cumulative Fix: $cfLevelStr Applied Successfully"
                     } else {
@@ -464,7 +474,7 @@ class cIBMWebSpherePortalCumulativeFix {
 }
 
 [DscResource()]
-class cIBMWebSpherePortalDatabaseTransfer {
+class cIBMWebSpherePortalDatabase {
     
     [DscProperty(Mandatory)]
     [Ensure] $Ensure
@@ -628,7 +638,7 @@ class cIBMWebSpherePortalDatabaseTransfer {
     }
     
     # Gets the portal's current database configuration
-    [cIBMWebSpherePortalDatabaseTransfer] Get() {
+    [cIBMWebSpherePortalDatabase] Get() {
         $RetEnsure = [Ensure]::Absent
         $RetDBHostname = $null
         $RetDatabasePort = $null

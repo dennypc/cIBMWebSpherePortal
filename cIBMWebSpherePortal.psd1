@@ -21,7 +21,7 @@ GUID = '363845a1-960b-4444-9fec-5a2461fbed26'
 NestedModules = @('cIBMWebSpherePortalUtils')
 
 # DSC resources to export from this module
-DscResourcesToExport = @('cIBMWebSpherePortal','cIBMWebSpherePortalCumulativeFix','cIBMWebSpherePortalDatabaseTransfer')
+DscResourcesToExport = @('cIBMWebSpherePortal','cIBMWebSpherePortalCumulativeFix','cIBMWebSpherePortalDatabase')
 
 # Author of this module
 Author = 'Denny Pichardo'

@@ -596,7 +596,9 @@ Function Install-IBMWebSpherePortalCumulativeFix() {
     	[parameter(Mandatory = $true)]
 		[string[]] $SourcePath,
 
-        [PSCredential] $SourcePathCredential
+        [PSCredential] $SourcePathCredential,
+        
+        [PSCredential] $SetupCredential
 	)
     
     $portalConfig = Get-IBMPortalConfig
@@ -665,6 +667,36 @@ Function Install-IBMWebSpherePortalCumulativeFix() {
                                 Write-Error "Error while executing config engine task: PRE-APPLY-FIX"
                             }
                         } else {
+                            Write-Verbose "Apply patches for CF9/10"
+                            if (($CFLevel -eq 9) -or ($CFLevel -eq 10)) {
+                                # Look for patch in the temp directory
+                                $patchFolder = Join-Path (Get-IBMInstallationManagerTempDir) "CF$CFLevel`Patch"
+                                if (Test-Path $patchFolder) {
+                                    # Patch Files
+                                    $wpearPatchXML = Join-Path $patchFolder "wp.ear.fp_cfg.xml"
+                                    $wpSimpleThemePatchXML = Join-Path $patchFolder "wp.theme.themes.simple_cfg.xml"
+                                    $wpThemeDevSitePatchXML = Join-Path $patchFolder "wp.theme.themes.themedevsite_cfg.xml"
+                                    # Original Files
+                                    $wpearXML = Join-Path $wpHome "\installer\wp.ear\config\includes\wp.ear.fp_cfg.xml"
+                                    $wpSimpleThemeXML = Join-Path $wpHome "\theme\wp.theme.themes\simple\config\includes\wp.theme.themes.simple_cfg.xml"
+                                    $wpThemeDevSiteXML = Join-Path $wpHome "\theme\wp.theme.themes\themedevsite\config\includes\wp.theme.themes.themedevsite_cfg.xml"
+                                    if ((Test-Path $wpearXML) -and (Test-Path $wpearPatchXML)) {
+                                        Copy-Item $wpearPatchXML -Destination $wpearXML -Force -Verbose | Out-Null
+                                    } else {
+                                        Write-Warning "Unable to patch wp.ear.fp_cfg.xml, path not found"
+                                    }
+                                    if ((Test-Path $wpSimpleThemeXML) -and (Test-Path $wpSimpleThemePatchXML)) {
+                                        Copy-Item $wpSimpleThemePatchXML -Destination $wpSimpleThemeXML -Force -Verbose | Out-Null
+                                    } else {
+                                        Write-Warning "Unable to patch wp.theme.themes.simple_cfg.xml, path not found"
+                                    }
+                                    if ((Test-Path $wpThemeDevSiteXML) -and (Test-Path $wpThemeDevSitePatchXML)) {
+                                        Copy-Item $wpThemeDevSitePatchXML -Destination $wpThemeDevSiteXML -Force -Verbose | Out-Null
+                                    } else {
+                                        Write-Warning "Unable to patch wp.theme.themes.themedevsite_cfg.xml, path not found"
+                                    }
+                                }
+                            }
                             Write-Verbose "Running applyCF.bat additional configuration step (Mandatory starting on WP 8.5 CF08)"
                             $wpBinDir = Join-Path ($portalConfig[[PortalConfig]::ProfilePath.ToString()]) -ChildPath "PortalServer\bin"
                             $applyCFbatch = Join-Path -Path $wpBinDir -ChildPath "applyCF.bat"
@@ -676,10 +708,17 @@ Function Install-IBMWebSpherePortalCumulativeFix() {
                                 $wpPwd = $wasPwd
                             }
                             if (Test-Path($applyCFbatch)) {
-                                $applyProcess = Invoke-ProcessHelper -ProcessFileName $applyCFbatch -WorkingDirectory $wpBinDir `
-                                                        -ProcessArguments @("-DPortalAdminPwd=$wpPwd", "-DWasPassword=$wasPwd")
+                                $applyProcess = $null
+                                if ($SetupCredential) {
+                                    $applyProcess = Invoke-Batch -BatchFile $applyCFbatch -WorkingDirectory $wpBinDir `
+                                             -Arguments @("-DPortalAdminPwd=$wpPwd", "-DWasPassword=$wasPwd") `
+                                             -RunAsCredential $SetupCredential -UseNewSession -Verbose
+                                } else {
+                                    $applyProcess = Invoke-Batch -BatchFile $applyCFbatch -WorkingDirectory $wpBinDir `
+                                             -Arguments @("-DPortalAdminPwd=$wpPwd", "-DWasPassword=$wasPwd")
+                                }
                                 if ($applyProcess -and (!($applyProcess.StdErr)) -and ($applyProcess.ExitCode -eq 0)) {
-                                    Write-Verbose $applyProcess.StdOut
+                                    Write-Verbose "applyCF.bat ran successfully"
                                 } else {
                                     $errorMsg = $null
                                     if ($applyProcess -and $applyProcess.StdErr) {
