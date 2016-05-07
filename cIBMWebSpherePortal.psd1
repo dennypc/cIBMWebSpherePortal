@@ -18,10 +18,10 @@ GUID = '363845a1-960b-4444-9fec-5a2461fbed26'
 #ScriptsToProcess = @()
 
 # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
-NestedModules = @('cIBMWebSpherePortalUtils')
+NestedModules = @('cIBMWebSpherePortalUtils','cIBMWPDBUtils','cIBMWPLDAPUtils')
 
 # DSC resources to export from this module
-DscResourcesToExport = @('cIBMWebSpherePortal','cIBMWebSpherePortalCumulativeFix','cIBMWebSpherePortalDatabase')
+DscResourcesToExport = @('cIBMWebSpherePortal','cIBMWebSpherePortalCumulativeFix','cIBMWebSpherePortalDatabase','cIBMWebSpherePortalLDAPRepository')
 
 # Author of this module
 Author = 'Denny Pichardo'

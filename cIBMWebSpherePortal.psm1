@@ -1,5 +1,7 @@
-# Import IBM WebSphere App Server Utils Module
+# Import IBM WebSphere Portal Utils Module
 Import-Module $PSScriptRoot\cIBMWebSpherePortalUtils.psm1 -ErrorAction Stop
+Import-Module $PSScriptRoot\cIBMWPDBUtils.psm1 -ErrorAction Stop
+Import-Module $PSScriptRoot\cIBMWPLDAPUtils.psm1 -ErrorAction Stop
 
 enum Ensure {
     Absent
@@ -27,6 +29,7 @@ enum PortalConfig {
     ProfileName
     ProfilePath
     ProfileConfigEnginePath
+    ServerName    
     Version
     CFLevel
     ConfigWizardProfilePath
@@ -37,6 +40,14 @@ enum DatabaseType {
     DB2
     ORACLE
     DERBY
+}
+
+enum LDAPType {
+    AD
+    IDS
+    DOMINO
+    NOVELL
+    SUNONE
 }
 
 <#
@@ -480,7 +491,7 @@ class cIBMWebSpherePortalDatabase {
     [Ensure] $Ensure
     
     [DscProperty()]
-    [DatabaseType] $PortalDatabaseType
+    [DatabaseType] $PortalDatabaseType = [DatabaseType]::SQLSERVER
     
     [DscProperty(Key)]
     [String] $DatabaseHostName
@@ -652,8 +663,6 @@ class cIBMWebSpherePortalDatabase {
         $serverName = (($wasTopology[$cellName]).GetValue(0)[$nodeName]).GetValue(0)
         $resourcesXMLPath = Join-Path $portalcfg["ProfilePath"] "config/cells/$cellName/nodes/$nodeName/servers/$serverName/resources.xml"
 
-        $sqlProviderType = "Microsoft SQL Server JDBC Driver (XA)"
-
         $RetRelDBConfig = @{ DomainName = "release" }
         $RetCommDBConfig = @{ DomainName = "community" }
         $RetCustDBConfig = @{ DomainName = "customization" }
@@ -666,7 +675,6 @@ class cIBMWebSpherePortalDatabase {
         if (Test-Path $resourcesXMLPath) {
             Write-Host "File found" -ForegroundColor DarkYellow
             [XML] $resourcesXML = Get-Content $resourcesXMLPath
-            $rootNode = $resourcesXML.ChildNodes[1]
             $ns = New-Object System.Xml.XmlNamespaceManager($resourcesXML.NameTable)
             $ns.AddNamespace("resources.env","http://www.ibm.com/websphere/appserver/schemas/5.0/resources.env.xmi")
             $dataStorePropSet = $resourcesXML.SelectSingleNode("//resources.env:ResourceEnvironmentProvider[@name='WP DataStoreService']/propertySet", $ns)
@@ -758,6 +766,137 @@ class cIBMWebSpherePortalDatabase {
             JcrDBConfig = $RetJcrDBConfig
             LmDBConfig = $RetLmDBConfig
             FdbkDBConfig = $RetFdbkDBConfig
+        }
+        
+        return $returnValue
+    }
+}
+
+[DscResource()]
+class cIBMWebSpherePortalLDAPRepository {
+    
+    [DscProperty(Mandatory)]
+    [Ensure] $Ensure
+    
+    [DscProperty()]
+    [LDAPType] $LDAPType = [LDAPType]::AD
+    
+    [DscProperty(Key)]
+    [String] $RealmName
+    
+    [DscProperty(Key)]
+    [String] $LDAPID
+    
+    [DscProperty(Mandatory)]
+    [String] $LDAPHostName
+    
+    [DscProperty()]
+    [Int] $LDAPPort = 389
+    
+    [DscProperty()]
+    [String] $BaseDN
+
+    [DscProperty()]
+    [String] $GroupSearchBase
+    
+    [DscProperty()]
+    [String] $UserSearchBase
+
+    [DscProperty(Mandatory)]
+    [String] $BindDN
+    
+    [DscProperty(Mandatory)]
+    [PSCredential] $BindPassword
+
+    [DscProperty()]
+    [Hashtable] $GroupAttributesConfig
+    
+    [DscProperty()]
+    [Hashtable] $UserAttributesConfig
+
+    [DscProperty(Mandatory)]
+    [PSCredential] $WebSphereAdministratorCredential
+    
+    [String] $REPOSITORY_QUERY_FILTER = "[wplc-query-federated-repository]"
+    
+    # Sets the desired state of the resource.
+    [void] Set() {
+        try {
+            if ($this.Ensure -eq [Ensure]::Present) {
+                $wpLDAPRsrc = $this.Get()
+                if ($wpLDAPRsrc.LDAPID -ne $this.LDAPID) {
+                    Write-Verbose "Registering LDAP Repository $($this.LDAPID)"
+                    [bool] $success = Register-LDAPRepository `
+                            -LDAPID $this.LDAPID `
+                            -RealmName $this.RealmName `
+                            -LDAPType $this.LDAPType `
+                            -LDAPHostName $this.LDAPHostName `
+                            -LDAPPort $this.LDAPPort `
+                            -BaseDN $this.BaseDN `
+                            -UserSearchBase $this.UserSearchBase `
+                            -GroupSearchBase $this.GroupSearchBase `
+                            -UserAttributesConfig $this.UserAttributesConfig `
+                            -GroupAttributesConfig $this.GroupAttributesConfig `
+                            -BindDN $this.BindDN `
+                            -BindPassword $this.BindPassword `
+                            -WebSphereAdministratorCredential $this.WebSphereAdministratorCredential
+                    if ($success) {
+                        Write-Verbose "LDAP Repository $($this.LDAPID) registered successfully"
+                    } else {
+                        Write-Error "An error occurred while registering the repository.  Please check ConfigTrace.log"
+                    }
+                } else {
+                    Write-Verbose "LDAP Already registered.  Needing to add attributes?"
+                }
+            } else {
+                Write-Warning "Removing LDAP Repository not implemented yet"
+            }
+        } catch {
+            Write-Error -ErrorRecord $_ -ErrorAction Stop
+        }
+    }
+    
+    # Tests if the resource is in the desired state.
+    [bool] Test() {
+        Write-Verbose "Checking the IBM WebSphere Portal LDAP Configuration"
+        $wpLDAPConfiguredCorrectly = $false
+        $wpLDAPRsrc = $this.Get()
+        
+        if (($wpLDAPRsrc.Ensure -eq $this.Ensure) -and ($wpLDAPRsrc.Ensure -eq [Ensure]::Present)) {
+            if ($wpLDAPRsrc.RealmName -eq $this.RealmName) {
+                if ($wpLDAPRsrc.LDAPID -eq $this.LDAPID) {
+                    Write-Verbose "IBM WebSphere Portal LDAP configured correctly"
+                    $wpLDAPConfiguredCorrectly = $true
+                    #TODO: Perform more testing
+                }
+            }
+        } elseif (($wpLDAPRsrc.Ensure -eq $this.Ensure) -and ($wpLDAPRsrc.Ensure -eq [Ensure]::Absent)) {
+            $wpLDAPConfiguredCorrectly = $true
+        }
+
+        if (!($wpLDAPConfiguredCorrectly)) {
+            Write-Verbose "IBM WebSphere Portal LDAP not configured correctly"
+        }
+        
+        return $wpLDAPConfiguredCorrectly
+    }
+    
+    # Gets the resource's current state.
+    [cIBMWebSpherePortalLDAPRepository] Get() {
+        $RetEnsure = [Ensure]::Absent
+        $RetLDAPID = $null
+        $wpRepos = Get-PortalUserRepositories -WebSphereAdministratorCredential $this.WebSphereAdministratorCredential
+        Write-Verbose ($wpRepos | Out-String)
+        if ($wpRepos -and $wpRepos.Contains($this.LDAPID)) {
+            $RetEnsure = [Ensure]::Present
+            $RetLDAPID = $this.LDAPID
+        }
+        $RetRealmName = Get-RealmName -WebSphereAdministratorCredential $this.WebSphereAdministratorCredential
+        
+        $returnValue = @{
+            Ensure = $RetEnsure
+            LDAPID = $RetLDAPID
+            RealmName = $RetRealmName
         }
         
         return $returnValue
